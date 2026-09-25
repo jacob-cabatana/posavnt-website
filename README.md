@@ -12,3 +12,9 @@ Static source for the POS AVNT marketing website and client-dashboard preview.
 ## Important
 
 The login and dashboard currently use preview data only. No Firebase project or live authentication is connected, and form entries are not transmitted or stored.
+
+Serve the repository root with any static web server. For example:
+
+```sh
+python3 -m http.server 4173
+```
