@@ -1,271 +1,60 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#050505">
-  <meta name="description" content="AVNT venue dashboard preview for analytics, menus, staff access, and account settings.">
-  <title>AVNT Dashboard</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23050505'/%3E%3Cpath d='M7 24 14.1 8h3.8L25 24h-4.5l-1.2-3H12.7l-1.2 3H7Zm7-6.8h4l-2-5.1-2 5.1Z' fill='%23a855f7'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Secure AVNT venue dashboard." />
+  <title>Venue dashboard — AVNT</title>
+  <link rel="stylesheet" href="./live.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Main navigation">
-      <div class="brand" aria-label="AVNT home">
-        <span class="brand-mark">A</span>
-        <span class="brand-name">AVNT</span>
-      </div>
-
-      <nav class="nav-list">
-        <button class="nav-item active" data-page="overview" aria-current="page">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
-          <span>Overview</span>
-        </button>
-        <button class="nav-item" data-page="money">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm7 3v12m4-9.5C16 7.12 14.2 6 12 6S8 7.12 8 8.5 9.8 11 12 11s4 1.12 4 2.5S14.2 16 12 16s-4-1.12-4-2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span>Money</span>
-        </button>
-        <button class="nav-item" data-page="menu">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5h8M8 12h8M8 16h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span>Menu</span>
-        </button>
-        <button class="nav-item" data-page="staff">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span>Staff</span>
-        </button>
-        <button class="nav-item" data-page="account">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5c0-.5-.05-.98-.14-1.45l2.04-1.6-2-3.46-2.55 1.03a8 8 0 0 0-2.5-1.45L13.86 2h-4l-.39 3.07a8 8 0 0 0-2.5 1.45L4.42 5.49l-2 3.46 2.04 1.6a8 8 0 0 0 0 2.9l-2.04 1.6 2 3.46 2.55-1.03a8 8 0 0 0 2.5 1.45l.39 3.07h4l.39-3.07a8 8 0 0 0 2.5-1.45l2.55 1.03 2-3.46-2.04-1.6c.09-.47.14-.95.14-1.45Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-          <span>Account</span>
-        </button>
+  <div id="authGate" class="auth-gate" role="status">Checking your AVNT account…</div>
+  <div id="appShell" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="../index.html" aria-label="AVNT home">AVNT</a>
+      <p class="sidebar-label">YOUR VENUE</p>
+      <nav aria-label="Dashboard sections">
+        <button class="nav-item active" type="button" data-page="overview" aria-current="page">Overview</button>
+        <button class="nav-item" type="button" data-page="menu">Menu</button>
+        <button class="nav-item" type="button" data-page="nights">Nights</button>
+        <button class="nav-item" type="button" data-page="settings">Settings</button>
       </nav>
-
-      <div class="sidebar-footer">
-        <button class="venue-switcher" id="venueSwitcher">
-          <span class="avatar">WC</span>
-          <span class="venue-meta"><strong>Wave Club</strong><small>Owner account</small></span>
-          <span class="chevron">⌄</span>
-        </button>
-      </div>
+      <div class="sidebar-account"><strong id="sidebarVenue">Venue</strong><small id="accountEmail"></small></div>
     </aside>
-
-    <main class="main-content">
+    <div class="workspace">
       <header class="topbar">
-        <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button>
-        <div class="venue-heading">
-          <span class="live-dot" aria-hidden="true"></span>
-          <span>Wave Club</span>
-        </div>
-        <div class="topbar-actions">
-          <span class="preview-badge"><span></span> Preview data</span>
-          <button class="icon-button" aria-label="Notifications">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Zm-8 12h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <i></i>
-          </button>
-        </div>
+        <button id="mobileNav" class="mobile-nav" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
+        <span id="topVenue">Venue</span>
+        <div class="topbar-right"><span class="live-badge"><i></i> Live AVNT data</span><button id="signOut" class="quiet-button" type="button">Sign out</button></div>
       </header>
-
-      <section class="page active" id="overview" aria-labelledby="overview-title">
-        <div class="page-header">
-          <div>
-            <p class="eyebrow">Friday, September 25</p>
-            <h1 id="overview-title">Good evening, Mohammed.</h1>
-            <p class="page-subtitle">Here’s how Wave Club is moving tonight.</p>
-          </div>
-          <div class="period-control" role="group" aria-label="Analytics period">
-            <button class="active" data-period="Tonight">Tonight</button>
-            <button data-period="7 days">7 days</button>
-            <button data-period="30 days">30 days</button>
-          </div>
-        </div>
-
-        <div class="overview-grid">
-          <article class="hero-card">
-            <div class="hero-topline">
-              <div><p class="metric-label" id="periodLabel">TONIGHT</p><strong class="hero-amount" id="grossSales">$4,512.53</strong><span>Gross drink sales</span></div>
-              <div class="hero-total"><p>TOTAL COLLECTED</p><strong id="totalCollected">$5,944.77</strong><span>including tips + tax</span></div>
-            </div>
-            <div class="chart-wrap" aria-label="Gross sales over time">
-              <div class="chart-y"><span>$2K</span><span>$1.5K</span><span>$1K</span><span>$500</span><span>$0</span></div>
-              <svg class="line-chart" viewBox="0 0 720 230" preserveAspectRatio="none" role="img" aria-label="Sales line chart">
-                <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".28"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
-                <g class="grid-lines"><path d="M0 15H720M0 65H720M0 115H720M0 165H720M0 215H720"/></g>
-                <path class="area" d="M0 140 C60 198 98 189 150 181 S236 178 280 206 S390 220 470 216 S540 44 605 54 S680 72 720 80 L720 230 L0 230Z"/>
-                <path class="trend" d="M0 140 C60 198 98 189 150 181 S236 178 280 206 S390 220 470 216 S540 44 605 54 S680 72 720 80"/>
-                <g class="points"><circle cx="0" cy="140" r="5"/><circle cx="150" cy="181" r="5"/><circle cx="280" cy="206" r="5"/><circle cx="605" cy="54" r="5"/><circle cx="720" cy="80" r="5"/></g>
-              </svg>
-              <div class="chart-x"><span>6 PM</span><span>8 PM</span><span>10 PM</span><span>12 AM</span><span>2 AM</span></div>
-            </div>
-          </article>
-
-          <article class="card sales-mix-card">
-            <div class="card-heading"><div><h2>Sales mix</h2><p>Where the total comes from</p></div><span class="pie-icon">◔</span></div>
-            <div class="donut" aria-label="Sales mix: 76% drink sales, 18% tips, 6% sales tax"><div><small>TOTAL</small><strong id="donutTotal">$5,944</strong></div></div>
-            <div class="legend">
-              <div><span class="swatch purple"></span><label>Drink sales</label><strong>$4,512.53</strong></div>
-              <div><span class="swatch blue"></span><label>Tips</label><strong>$1,067.34</strong></div>
-              <div><span class="swatch amber"></span><label>Sales tax</label><strong>$364.90</strong></div>
-            </div>
-          </article>
-        </div>
-
-        <div class="stats-grid">
-          <article class="stat-card"><span class="stat-icon purple-bg">▤</span><div><p>ORDERS</p><strong>349</strong><span>completed sales</span></div></article>
-          <article class="stat-card"><span class="stat-icon blue-bg">▥</span><div><p>AVERAGE SALE</p><strong>$12.93</strong><span>before tip and tax</span></div></article>
-          <article class="stat-card"><span class="stat-icon green-bg">●</span><div><p>ITEMS SOLD</p><strong>645</strong><span>drinks served</span></div></article>
-          <article class="stat-card"><span class="stat-icon pink-bg">♥</span><div><p>TIPS</p><strong>$1,067</strong><span>23.7% of sales</span></div></article>
-        </div>
-
-        <div class="bottom-grid">
-          <article class="card best-sellers">
-            <div class="card-heading"><div><h2>Best sellers</h2><p>Ranked by drink revenue tonight</p></div><button class="text-button" data-page-link="menu">View menu →</button></div>
-            <div class="seller-row"><span class="rank">1</span><div><strong>Espresso Martini</strong><span><i style="width:92%"></i></span></div><small>186 sold</small><strong>$1,488.00</strong></div>
-            <div class="seller-row"><span class="rank">2</span><div><strong>Casamigos Margarita</strong><span><i style="width:71%"></i></span></div><small>129 sold</small><strong>$1,161.00</strong></div>
-            <div class="seller-row"><span class="rank">3</span><div><strong>Vodka Soda</strong><span><i style="width:55%"></i></span></div><small>114 sold</small><strong>$912.00</strong></div>
-          </article>
-          <article class="card tonight-card">
-            <div class="card-heading"><div><h2>Tonight</h2><p>Live venue status</p></div><span class="status-pill">Open</span></div>
-            <div class="tonight-line"><span>Active staff</span><strong>5</strong></div>
-            <div class="tonight-line"><span>Open tabs</span><strong>18</strong></div>
-            <div class="tonight-line"><span>Current pace</span><strong class="positive">+12.4%</strong></div>
-            <div class="shift-note"><span>MM</span><p><strong>Mohammed M</strong><small>Signed in · Owner</small></p></div>
-          </article>
-        </div>
-      </section>
-
-      <section class="page" id="money" aria-labelledby="money-title">
-        <div class="page-header">
-          <div><p class="eyebrow">Financial overview</p><h1 id="money-title">Money</h1><p class="page-subtitle">Sales, tips, taxes, and estimated payouts in one place.</p></div>
-          <button class="primary-button" data-toast="Report export prepared in preview mode">Export report</button>
-        </div>
-        <div class="money-kpis">
-          <article class="metric-card featured"><p>NET SALES</p><strong>$13,842.68</strong><span><b>↑ 18.2%</b> from previous period</span></article>
-          <article class="metric-card"><p>TIPS</p><strong>$3,211.45</strong><span>23.2% tip rate</span></article>
-          <article class="metric-card"><p>TAX COLLECTED</p><strong>$1,107.42</strong><span>Ready for reporting</span></article>
-          <article class="metric-card"><p>EST. PAYOUT</p><strong>$16,987.19</strong><span>After $1,174.36 in fees</span></article>
-        </div>
-        <div class="finance-grid">
-          <article class="card revenue-card">
-            <div class="card-heading"><div><h2>Revenue</h2><p>Net sales by night · last 7 days</p></div><span class="big-change">+18.2%</span></div>
-            <div class="bar-chart" aria-label="Revenue by night">
-              <div class="bar" style="--h:44%"><span>$1.2K</span><i></i><small>Fri</small></div>
-              <div class="bar" style="--h:62%"><span>$1.8K</span><i></i><small>Sat</small></div>
-              <div class="bar" style="--h:37%"><span>$980</span><i></i><small>Sun</small></div>
-              <div class="bar" style="--h:25%"><span>$640</span><i></i><small>Mon</small></div>
-              <div class="bar" style="--h:34%"><span>$890</span><i></i><small>Tue</small></div>
-              <div class="bar" style="--h:72%"><span>$2.1K</span><i></i><small>Wed</small></div>
-              <div class="bar active" style="--h:88%"><span>$2.7K</span><i></i><small>Thu</small></div>
-            </div>
-          </article>
-          <article class="card payout-card">
-            <div class="card-heading"><div><h2>Next payout</h2><p>Estimated arrival</p></div><span class="bank-icon">$</span></div>
-            <strong class="payout-amount">$16,987.19</strong>
-            <p class="payout-date">Monday, September 28</p>
-            <div class="payout-breakdown"><span>Gross collected <b>$18,161.55</b></span><span>Processing fees <b>−$1,174.36</b></span><span>Estimated payout <b>$16,987.19</b></span></div>
-            <button class="secondary-button" data-toast="Payout details opened in preview mode">View payout details</button>
-          </article>
-        </div>
-        <article class="card transactions-card">
-          <div class="card-heading"><div><h2>Recent activity</h2><p>Latest settled batches and adjustments</p></div><button class="text-button">View all →</button></div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Status</th><th>Sales</th><th>Fees</th><th>Total</th></tr></thead><tbody>
-            <tr><td>Sep 24</td><td>Nightly batch</td><td><span class="table-status paid">Paid</span></td><td>$5,944.77</td><td>−$382.14</td><td><strong>$5,562.63</strong></td></tr>
-            <tr><td>Sep 23</td><td>Nightly batch</td><td><span class="table-status pending">Processing</span></td><td>$4,238.12</td><td>−$271.87</td><td><strong>$3,966.25</strong></td></tr>
-            <tr><td>Sep 22</td><td>Nightly batch</td><td><span class="table-status paid">Paid</span></td><td>$3,921.45</td><td>−$251.08</td><td><strong>$3,670.37</strong></td></tr>
-          </tbody></table></div>
-        </article>
-      </section>
-
-      <section class="page" id="menu" aria-labelledby="menu-title">
-        <div class="page-header">
-          <div><p class="eyebrow">42 items · 5 categories</p><h1 id="menu-title">Menu</h1><p class="page-subtitle">Manage what guests can order at Wave Club.</p></div>
-          <button class="primary-button" id="addMenuItem">+ Add item</button>
-        </div>
-        <div class="toolbar">
-          <label class="search-box"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="menuSearch" type="search" placeholder="Search menu items" aria-label="Search menu items"></label>
-          <div class="filter-tabs" role="group" aria-label="Menu categories"><button class="active" data-filter="all">All</button><button data-filter="cocktails">Cocktails</button><button data-filter="spirits">Spirits</button><button data-filter="beer">Beer</button><button data-filter="non-alcoholic">Zero proof</button></div>
-        </div>
-        <div class="menu-layout">
-          <div class="menu-list" id="menuList">
-            <article class="menu-row" data-category="cocktails" data-name="espresso martini"><span class="menu-symbol purple-bg">EM</span><div class="menu-info"><strong>Espresso Martini</strong><span>Cocktails · Vodka, espresso, coffee liqueur</span></div><div class="menu-sales"><strong>186</strong><span>sold tonight</span></div><strong class="menu-price">$8.00</strong><label class="switch" aria-label="Espresso Martini available"><input type="checkbox" checked><span></span></label><button class="row-action" aria-label="More options">•••</button></article>
-            <article class="menu-row" data-category="cocktails" data-name="casamigos margarita"><span class="menu-symbol amber-bg">CM</span><div class="menu-info"><strong>Casamigos Margarita</strong><span>Cocktails · Tequila, lime, agave</span></div><div class="menu-sales"><strong>129</strong><span>sold tonight</span></div><strong class="menu-price">$9.00</strong><label class="switch" aria-label="Casamigos Margarita available"><input type="checkbox" checked><span></span></label><button class="row-action" aria-label="More options">•••</button></article>
-            <article class="menu-row" data-category="spirits" data-name="vodka soda"><span class="menu-symbol blue-bg">VS</span><div class="menu-info"><strong>Vodka Soda</strong><span>Spirits · House vodka, soda, lime</span></div><div class="menu-sales"><strong>114</strong><span>sold tonight</span></div><strong class="menu-price">$8.00</strong><label class="switch" aria-label="Vodka Soda available"><input type="checkbox" checked><span></span></label><button class="row-action" aria-label="More options">•••</button></article>
-            <article class="menu-row" data-category="beer" data-name="modelo especial"><span class="menu-symbol green-bg">ME</span><div class="menu-info"><strong>Modelo Especial</strong><span>Beer · 12 oz bottle</span></div><div class="menu-sales"><strong>84</strong><span>sold tonight</span></div><strong class="menu-price">$7.00</strong><label class="switch" aria-label="Modelo Especial available"><input type="checkbox" checked><span></span></label><button class="row-action" aria-label="More options">•••</button></article>
-            <article class="menu-row muted" data-category="non-alcoholic" data-name="sparkling water"><span class="menu-symbol gray-bg">SW</span><div class="menu-info"><strong>Sparkling Water</strong><span>Zero proof · 12 oz can</span></div><div class="menu-sales"><strong>22</strong><span>sold tonight</span></div><strong class="menu-price">$4.00</strong><label class="switch" aria-label="Sparkling Water available"><input type="checkbox"><span></span></label><button class="row-action" aria-label="More options">•••</button></article>
-            <p class="empty-state" id="menuEmpty">No menu items match that search.</p>
-          </div>
-          <aside class="card menu-summary">
-            <h2>Menu health</h2><p>Everything guests can currently order.</p>
-            <div class="health-score"><strong>95%</strong><span>available</span></div>
-            <div class="health-line"><span>Live items</span><strong>40</strong></div><div class="health-line"><span>Unavailable</span><strong>2</strong></div><div class="health-line"><span>Needs a price</span><strong>0</strong></div>
-            <div class="preview-note"><span>◉</span><p><strong>Preview mode</strong><small>Changes here are temporary and do not reach the live POS.</small></p></div>
-          </aside>
-        </div>
-      </section>
-
-      <section class="page" id="staff" aria-labelledby="staff-title">
-        <div class="page-header">
-          <div><p class="eyebrow">5 active · 1 invited</p><h1 id="staff-title">Staff access</h1><p class="page-subtitle">Control who can run service and view venue information.</p></div>
-          <button class="primary-button" id="inviteStaff">+ Invite staff</button>
-        </div>
-        <div class="staff-overview">
-          <article class="staff-stat"><span class="staff-icon purple-bg">♙</span><div><strong>5</strong><p>Active staff</p></div></article>
-          <article class="staff-stat"><span class="staff-icon green-bg">✓</span><div><strong>3</strong><p>On shift tonight</p></div></article>
-          <article class="staff-stat"><span class="staff-icon blue-bg">◇</span><div><strong>2</strong><p>Managers</p></div></article>
-        </div>
-        <article class="card staff-table-card">
-          <div class="card-heading"><div><h2>Team</h2><p>Roles and access across Wave Club</p></div><label class="search-box small"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input type="search" placeholder="Search team" aria-label="Search team"></label></div>
-          <div class="team-list">
-            <div class="team-row"><span class="person-avatar owner">MM</span><div><strong>Mohammed M <em>You</em></strong><span>mohammed@waveclub.com</span></div><span class="role-pill owner-role">Owner</span><span class="activity"><i></i> Online now</span><button class="row-action">•••</button></div>
-            <div class="team-row"><span class="person-avatar">AL</span><div><strong>Alex Lee</strong><span>alex@waveclub.com</span></div><span class="role-pill">Manager</span><span class="activity"><i></i> On shift</span><button class="row-action">•••</button></div>
-            <div class="team-row"><span class="person-avatar">JS</span><div><strong>Jordan Smith</strong><span>jordan@waveclub.com</span></div><span class="role-pill bartender">Bartender</span><span class="activity"><i></i> On shift</span><button class="row-action">•••</button></div>
-            <div class="team-row"><span class="person-avatar">RP</span><div><strong>Riley Parker</strong><span>riley@waveclub.com</span></div><span class="role-pill bartender">Bartender</span><span class="activity away"><i></i> 2 days ago</span><button class="row-action">•••</button></div>
-            <div class="team-row"><span class="person-avatar">KT</span><div><strong>Kai Thompson</strong><span>kai@waveclub.com</span></div><span class="role-pill bartender">Bartender</span><span class="activity away"><i></i> 5 days ago</span><button class="row-action">•••</button></div>
-            <div class="team-row invited"><span class="person-avatar">SN</span><div><strong>Sam Nguyen</strong><span>sam@waveclub.com</span></div><span class="role-pill invited-role">Invited</span><span class="activity away">Sent yesterday</span><button class="row-action">•••</button></div>
-          </div>
-        </article>
-      </section>
-
-      <section class="page" id="account" aria-labelledby="account-title">
-        <div class="page-header">
-          <div><p class="eyebrow">Venue profile</p><h1 id="account-title">Account settings</h1><p class="page-subtitle">Manage your venue details, preferences, and security.</p></div>
-          <button class="primary-button" id="saveSettings">Save changes</button>
-        </div>
-        <div class="settings-grid">
-          <div class="settings-main">
-            <article class="card settings-card">
-              <div class="card-heading"><div><h2>Venue details</h2><p>Shown on receipts, reports, and guest checkout.</p></div></div>
-              <div class="form-grid"><label>Venue name<input type="text" value="Wave Club"></label><label>Business email<input type="email" value="hello@waveclub.com"></label><label>Phone number<input type="tel" value="(404) 555-0186"></label><label>Time zone<select><option>Eastern Time (ET)</option><option>Central Time (CT)</option><option>Mountain Time (MT)</option><option>Pacific Time (PT)</option></select></label><label class="full">Address<input type="text" value="1888 Crescent Avenue NE, Atlanta, GA 30309"></label></div>
-            </article>
-            <article class="card settings-card">
-              <div class="card-heading"><div><h2>Notifications</h2><p>Choose what AVNT sends to the owner account.</p></div></div>
-              <div class="setting-row"><div><strong>Nightly closeout</strong><span>Email a summary when the venue closes.</span></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
-              <div class="setting-row"><div><strong>Payout updates</strong><span>Get notified when money is on the way.</span></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
-              <div class="setting-row"><div><strong>Staff activity</strong><span>Receive alerts for new staff and access changes.</span></div><label class="switch"><input type="checkbox"><span></span></label></div>
-            </article>
-          </div>
-          <aside class="settings-side">
-            <article class="card migration-card">
-              <span class="lock-icon">⌁</span><p class="metric-label">MIGRATION SAFEGUARD</p><h2>Live data stays untouched tonight.</h2><p>This preview is isolated from both Firebase projects. Account and venue data migration will begin only after the event and after a verified backup.</p>
-              <div class="migration-step done"><i>✓</i><span><strong>Dashboard preview</strong><small>Safe demo data only</small></span></div>
-              <div class="migration-step"><i>2</i><span><strong>Map client records</strong><small>After tonight’s event</small></span></div>
-              <div class="migration-step"><i>3</i><span><strong>Copy and verify</strong><small>No source deletion</small></span></div>
-            </article>
-            <article class="card account-card"><span class="person-avatar owner large">MM</span><div><strong>Mohammed M</strong><span>Owner · Wave Club</span></div><button class="secondary-button" id="signOut">Sign out</button></article>
-          </aside>
-        </div>
-      </section>
-    </main>
+      <main>
+        <section id="overview" class="page active" aria-labelledby="overviewTitle">
+          <div class="page-heading"><div><p class="eyebrow">VENUE PERFORMANCE</p><h1 id="overviewTitle">Overview</h1><p>Sales and service activity from your AVNT POS.</p></div><div class="period-control" role="group" aria-label="Analytics period"><button type="button" data-period="tonight" class="active">Tonight</button><button type="button" data-period="7">7 days</button><button type="button" data-period="30">30 days</button></div></div>
+          <p id="analyticsNotice" class="notice" hidden></p>
+          <div class="hero-grid"><article class="hero-card"><span>GROSS DRINK SALES</span><strong id="grossSales">—</strong><small id="periodLabel">Tonight</small><div id="salesChart" class="sales-chart" aria-label="Sales by day"></div></article><article class="card collection-card"><span>GROSS COLLECTED</span><strong id="grossCollected">—</strong><p>Drinks, tips, tax, and any customer-paid POS fees, before refunds.</p><div class="collection-lines"><div><span>Refunded</span><b id="refunds">—</b></div><div><span>Net collected</span><b id="netCollected">—</b></div></div></article></div>
+          <div class="metric-grid"><article class="card metric"><span>ORDERS</span><strong id="orderCount">—</strong></article><article class="card metric"><span>ITEMS SOLD</span><strong id="itemsSold">—</strong></article><article class="card metric"><span>AVERAGE DRINK SALE</span><strong id="averageSale">—</strong></article><article class="card metric"><span>TIPS</span><strong id="tips">—</strong></article><article class="card metric"><span>VENUE SALES TAX</span><strong id="venueTax">—</strong></article><article class="card metric"><span>CUSTOMER-PAID POS FEES</span><strong id="customerFees">—</strong></article></div>
+          <div class="detail-grid"><article class="card detail-card"><div class="card-heading"><h2>Best sellers</h2><span>By drink revenue</span></div><div id="bestSellers" class="list"></div></article><article class="card detail-card"><div class="card-heading"><h2>Recent sales</h2><span>Paid orders only</span></div><div id="recentSales" class="list"></div></article></div>
+          <p class="fine-print">POS totals are based on venue order records. They are not a Stripe payout estimate. Tax on POS fees is included in gross collected.</p>
+        </section>
+        <section id="menu" class="page" aria-labelledby="menuTitle">
+          <div class="page-heading"><div><p class="eyebrow">LIVE POS CATALOG</p><h1 id="menuTitle">Menu</h1><p>Prices and availability update on the POS when saved.</p></div><button id="addDrink" class="primary-button" type="button">Add item</button></div>
+          <div class="toolbar"><label>Search menu<input id="menuSearch" type="search" placeholder="Item name" /></label><label>Category<select id="menuCategory"><option value="all">All categories</option><option value="cocktails">Cocktails</option><option value="shots">Shots</option><option value="beer">Beer</option><option value="seltzers">Seltzers</option><option value="wine">Wine</option><option value="food">Food</option><option value="non_alcoholic">Non-alcoholic</option><option value="hookah">Hookah</option><option value="specials">Specials</option><option value="modifiers">Modifiers</option></select></label></div>
+          <div id="menuSummary" class="section-summary">Loading menu…</div><div id="menuList" class="item-list"></div>
+        </section>
+        <section id="nights" class="page" aria-labelledby="nightsTitle">
+          <div class="page-heading"><div><p class="eyebrow">NIGHTLY OFFERINGS</p><h1 id="nightsTitle">Nights</h1><p>Manage your POS night selection and drink specials.</p></div><button id="addNight" class="primary-button" type="button">Add night</button></div>
+          <div class="nights-grid"><div id="nightList" class="item-list" aria-label="Venue nights"></div><div class="card night-detail"><div class="card-heading"><div><p class="eyebrow">SELECTED NIGHT</p><h2 id="selectedNightName">Choose a night</h2><p id="selectedNightNote"></p></div><button id="editNight" class="quiet-button" type="button" hidden>Edit</button></div><div class="night-actions"><button id="activateNight" class="secondary-button" type="button" hidden>Use on POS</button><button id="addSpecial" class="primary-button" type="button" hidden>Add special</button></div><div id="specialList" class="item-list"><p class="empty-state">Select a night to view its specials.</p></div></div></div>
+        </section>
+        <section id="settings" class="page" aria-labelledby="settingsTitle">
+          <div class="page-heading"><div><p class="eyebrow">VENUE CONTROLS</p><h1 id="settingsTitle">Settings</h1><p>These changes also affect the AVNT iPad POS.</p></div></div>
+          <form id="settingsForm" class="settings-grid"><div class="card settings-card"><h2>Venue</h2><label>Venue name<input id="settingVenueName" type="text" maxlength="80" required /></label><label>Sales tax rate (managed on iPad)<input id="settingTaxRate" type="text" readonly /></label><p class="fine-print">Change tax jurisdiction and rates from Setup on the iPad.</p></div><div class="card settings-card"><h2>Checkout</h2><label class="toggle-row"><span><strong>Venue covers POS fees</strong><small>When off, the customer pays. This changes future checkouts.</small></span><input id="settingVenuePaysFees" type="checkbox" /></label><label class="toggle-row"><span><strong>Automatic gratuity</strong><small>Add the selected rate to card sales.</small></span><input id="settingGratuityEnabled" type="checkbox" /></label><label>Automatic gratuity rate<select id="settingGratuityRate"><option value="500">5%</option><option value="1000">10%</option><option value="1500">15%</option><option value="2000">20%</option></select></label><label class="toggle-row"><span><strong>Training mode</strong><small>Practice checkout only—no real card payments while enabled.</small></span><input id="settingTrainingMode" type="checkbox" /></label></div><div class="settings-save"><button id="saveSettings" class="primary-button" type="submit">Save settings</button><span id="settingsStatus" role="status"></span></div></form>
+        </section>
+      </main>
+    </div>
   </div>
-
-  <div class="modal-backdrop" id="modalBackdrop" hidden>
-    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <button class="modal-close" id="modalClose" aria-label="Close">×</button>
-      <p class="eyebrow" id="modalEyebrow">PREVIEW MODE</p><h2 id="modalTitle">Invite staff</h2><p id="modalDescription">This creates a temporary preview invite only.</p>
-      <div class="modal-form" id="modalForm"></div>
-      <button class="primary-button wide" id="modalSubmit">Continue</button>
-    </section>
-  </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p></p></div>
-  <script src="./app.js"></script>
+  <dialog id="editorDialog" class="editor-dialog" aria-labelledby="editorTitle"><form id="editorForm"><div class="dialog-heading"><p class="eyebrow">AVNT VENUE</p><h2 id="editorTitle">Edit</h2><button id="closeEditor" type="button" aria-label="Close">×</button></div><div id="editorFields" class="editor-fields"></div><p id="editorError" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button id="cancelEditor" class="secondary-button" type="button">Cancel</button><button id="saveEditor" class="primary-button" type="submit">Save</button></div></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>

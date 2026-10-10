@@ -1,20 +1,27 @@
 # POS AVNT website
 
-Static source for the POS AVNT marketing website and client-dashboard preview.
+Static source for the POS AVNT marketing website and live owner dashboard.
 
 ## Structure
 
 - `index.html` — public marketing homepage
-- `client-login.html` — preview client login
-- `dashboard/` — client dashboard preview
+- `client-login.html` — Firebase Email/Password venue-owner login
+- `dashboard/` — live AVNT analytics, menu, nights, and venue settings
 - `assets/` — POS product screenshots
 
 ## Important
 
-The login and dashboard currently use preview data only. No Firebase project or live authentication is connected, and form entries are not transmitted or stored.
+The dashboard signs in against AVNT Firebase (`avnt-832d8`). It only reads and
+writes `venues/{auth.uid}` and its child collections. Firestore Security Rules
+must remain deployed so authenticated owners cannot access other venues.
+Staff PINs do not grant website access. Dashboard analytics come from AVNT order
+records, not Stripe payout or balance calculations. The last 1,000 order records
+are loaded; the UI warns if that cap is reached.
 
 Serve the repository root with any static web server. For example:
 
 ```sh
 python3 -m http.server 4173
 ```
+
+Run analytics checks with `node --test dashboard/metrics.test.mjs`.

@@ -52,26 +52,21 @@
       <section class="intro" aria-labelledby="login-title">
         <p class="eyebrow">AVNT FOR HOSTS</p>
         <h1 id="login-title">Run the night.<span>From anywhere.</span></h1>
-        <p>See sales, manage your menu, control staff access, and keep your venue account current—even when you’re away from the POS.</p>
-        <div class="trust-row" aria-label="Dashboard capabilities"><span>Money analytics</span><span>Menu controls</span><span>Staff access</span></div>
+        <p>See sales, manage your menu and nights, and update venue settings—even when you’re away from the POS.</p>
+        <div class="trust-row" aria-label="Dashboard capabilities"><span>Live analytics</span><span>Menu controls</span><span>Venue settings</span></div>
       </section>
       <section class="login-card" aria-labelledby="form-title">
         <h2 id="form-title">Client login</h2>
         <p>Enter your venue account details to continue.</p>
         <form id="loginForm">
-          <label>Email address<input type="email" autocomplete="username" placeholder="you@yourvenue.com" required /></label>
-          <label>Password<input type="password" autocomplete="current-password" placeholder="Enter your password" required /></label>
-          <div class="form-meta"><span>Secure access for venue owners</span><a href="mailto:hello@posavnt.com?subject=AVNT%20login%20help">Need help?</a></div>
-          <button class="login-button" type="submit">Continue to dashboard →</button>
+          <label>Email address<input id="loginEmail" type="email" autocomplete="username" placeholder="you@yourvenue.com" required /></label>
+          <label>Password<input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter your password" required /></label>
+          <div class="form-meta"><span>Same owner login as your AVNT iPad</span><a id="resetPassword" href="#">Reset password</a></div>
+          <p id="loginMessage" role="alert" hidden style="font-size:.85rem;line-height:1.5"></p>
+          <button class="login-button" id="loginSubmit" type="submit">Continue to dashboard →</button>
         </form>
-        <div class="preview-note"><i aria-hidden="true"></i><p><strong>Preview access</strong><small>Authentication is not connected yet. Details entered here stay in your browser and are not sent or stored.</small></p></div>
       </section>
     </main>
-    <script>
-      document.getElementById('loginForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        window.location.href = 'dashboard/';
-      });
-    </script>
+    <script type="module" src="./login.js"></script>
   </body>
 </html>

@@ -1,162 +1,420 @@
-const pages = [...document.querySelectorAll('.page')];
-const navItems = [...document.querySelectorAll('.nav-item')];
-const sidebar = document.querySelector('.sidebar');
-const mobileNavToggle = document.getElementById('mobileNavToggle');
-const toast = document.getElementById('toast');
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { auth, db } from '../firebase.js';
+import { calculateMetrics } from './metrics.mjs';
+
+const $ = id => document.getElementById(id);
+const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100);
+const dollars = amount => money(Math.round((Number(amount) || 0) * 100));
+const categories = ['cocktails', 'shots', 'beer', 'seltzers', 'wine', 'food', 'non_alcoholic', 'hookah', 'specials', 'modifiers'];
+const categoryName = value => ({ non_alcoholic: 'Non-alcoholic' })[value] || (value ? value[0].toUpperCase() + value.slice(1) : 'Other');
+const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: 'tonight', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
 let toastTimer;
 
-function navigate(pageId) {
-  pages.forEach(page => page.classList.toggle('active', page.id === pageId));
-  navItems.forEach(item => {
-    const active = item.dataset.page === pageId;
-    item.classList.toggle('active', active);
-    active ? item.setAttribute('aria-current', 'page') : item.removeAttribute('aria-current');
-  });
-  sidebar.classList.remove('open');
-  mobileNavToggle.setAttribute('aria-expanded', 'false');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  history.replaceState(null, '', `#${pageId}`);
+function node(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
 }
 
-navItems.forEach(item => item.addEventListener('click', () => navigate(item.dataset.page)));
-document.querySelectorAll('[data-page-link]').forEach(item => item.addEventListener('click', () => navigate(item.dataset.pageLink)));
-mobileNavToggle.addEventListener('click', () => {
-  const open = sidebar.classList.toggle('open');
-  mobileNavToggle.setAttribute('aria-expanded', String(open));
-});
-
-const periodData = {
-  'Tonight': ['$4,512.53', '$5,944.77', '$5,944'],
-  '7 days': ['$13,842.68', '$18,161.55', '$18,161'],
-  '30 days': ['$48,921.40', '$63,834.12', '$63,834']
-};
-document.querySelectorAll('.period-control button').forEach(button => button.addEventListener('click', () => {
-  document.querySelectorAll('.period-control button').forEach(item => item.classList.toggle('active', item === button));
-  const [gross, collected, total] = periodData[button.dataset.period];
-  document.getElementById('periodLabel').textContent = button.dataset.period.toUpperCase();
-  document.getElementById('grossSales').textContent = gross;
-  document.getElementById('totalCollected').textContent = collected;
-  document.getElementById('donutTotal').textContent = total;
-}));
-
-function showToast(message) {
+function message(text) {
+  const toast = $('toast');
+  toast.textContent = text;
+  toast.hidden = false;
   clearTimeout(toastTimer);
-  toast.querySelector('p').textContent = message;
-  toast.classList.add('show');
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 4500);
 }
-document.querySelectorAll('[data-toast]').forEach(button => button.addEventListener('click', () => showToast(button.dataset.toast)));
 
-const menuRows = [...document.querySelectorAll('.menu-row')];
-const menuSearch = document.getElementById('menuSearch');
-let activeFilter = 'all';
-function filterMenu() {
-  const query = menuSearch.value.trim().toLowerCase();
-  let visible = 0;
-  menuRows.forEach(row => {
-    const match = (activeFilter === 'all' || row.dataset.category === activeFilter) && row.dataset.name.includes(query);
-    row.style.display = match ? '' : 'none';
-    if (match) visible++;
-  });
-  document.getElementById('menuEmpty').style.display = visible ? 'none' : 'block';
+function fail(error, context) {
+  console.error(context, error);
+  message(`${context}. Please try again.`);
 }
-menuSearch.addEventListener('input', filterMenu);
-document.querySelectorAll('.filter-tabs button').forEach(button => button.addEventListener('click', () => {
-  activeFilter = button.dataset.filter;
-  document.querySelectorAll('.filter-tabs button').forEach(item => item.classList.toggle('active', item === button));
-  filterMenu();
-}));
-document.querySelectorAll('.menu-row .switch input').forEach(input => input.addEventListener('change', () => {
-  input.closest('.menu-row').classList.toggle('muted', !input.checked);
-  showToast(input.checked ? 'Item marked available in preview' : 'Item hidden in preview');
-}));
 
-const modalBackdrop = document.getElementById('modalBackdrop');
-const modalTitle = document.getElementById('modalTitle');
-const modalDescription = document.getElementById('modalDescription');
-const modalForm = document.getElementById('modalForm');
-const modalSubmit = document.getElementById('modalSubmit');
-function openModal(type) {
-  if (type === 'staff') {
-    modalTitle.textContent = 'Invite staff';
-    modalDescription.textContent = 'Set a role now. No live invitation will be sent.';
-    modalForm.innerHTML = '<label>Email address<input type="email" placeholder="name@waveclub.com"></label><label>Role<select><option>Bartender</option><option>Manager</option><option>Viewer</option></select></label>';
-    modalSubmit.textContent = 'Create preview invite';
-    modalSubmit.dataset.message = 'Preview invite created — no email was sent';
-  } else if (type === 'menu') {
-    modalTitle.textContent = 'Add menu item';
-    modalDescription.textContent = 'Create a draft item for this preview only.';
-    modalForm.innerHTML = '<label>Item name<input type="text" placeholder="Drink name"></label><label>Category<select><option>Cocktails</option><option>Spirits</option><option>Beer</option><option>Zero proof</option></select></label><label>Price<input type="text" inputmode="decimal" placeholder="$0.00"></label>';
-    modalSubmit.textContent = 'Add draft item';
-    modalSubmit.dataset.message = 'Draft item added in preview mode';
-  } else {
-    modalTitle.textContent = 'Welcome back';
-    modalDescription.textContent = 'This is the dashboard sign-in preview. Live authentication is not connected.';
-    modalForm.innerHTML = '<label>Email address<input type="email" value="mohammed@waveclub.com"></label><label>Password<input type="password" value="previewonly"></label>';
-    modalSubmit.textContent = 'Sign in to preview';
-    modalSubmit.dataset.message = 'Signed in to dashboard preview';
-  }
-  modalBackdrop.hidden = false;
-  setTimeout(() => modalForm.querySelector('input')?.focus(), 0);
+function clearListeners() {
+  state.unsubscribers.splice(0).forEach(unsubscribe => unsubscribe());
+  state.specialUnsubscribe?.();
+  state.specialUnsubscribe = null;
 }
-function closeModal() { modalBackdrop.hidden = true; }
-document.getElementById('inviteStaff').addEventListener('click', () => openModal('staff'));
-document.getElementById('addMenuItem').addEventListener('click', () => openModal('menu'));
-document.getElementById('signOut').addEventListener('click', () => { window.location.href = '../client-login.html'; });
-document.getElementById('modalClose').addEventListener('click', closeModal);
-modalBackdrop.addEventListener('click', event => { if (event.target === modalBackdrop) closeModal(); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
-modalSubmit.addEventListener('click', () => { closeModal(); showToast(modalSubmit.dataset.message); });
-document.getElementById('saveSettings').addEventListener('click', () => showToast('Settings saved locally for this preview'));
-document.getElementById('venueSwitcher').addEventListener('click', () => showToast('Wave Club is the only venue in this preview'));
 
-const initialPage = location.hash.slice(1);
-if (pages.some(page => page.id === initialPage)) navigate(initialPage);
+function venueRef() { return doc(db, 'venues', state.uid); }
+function drinksRef() { return collection(db, 'venues', state.uid, 'drinks'); }
+function nightsRef() { return collection(db, 'venues', state.uid, 'nights'); }
+function nightRef(id) { return doc(db, 'venues', state.uid, 'nights', id); }
+function specialsRef(id) { return collection(db, 'venues', state.uid, 'nights', id, 'specials'); }
 
-// Let supported browsers expose the same safe preview actions to assistants.
-const modelContext = document.modelContext;
-if (modelContext?.registerTool) {
-  const pageIds = pages.map(page => page.id);
-  Promise.resolve(modelContext.registerTool({
-    name: 'navigate_dashboard_preview',
-    title: 'Open dashboard section',
-    description: 'Navigate the AVNT dashboard preview to Overview, Money, Menu, Staff, or Account.',
-    inputSchema: {
-      type: 'object',
-      properties: { section: { type: 'string', enum: pageIds } },
-      required: ['section'],
-      additionalProperties: false
-    },
-    annotations: { readOnlyHint: true, untrustedContentHint: false },
-    execute(input) {
-      if (!pageIds.includes(input?.section)) throw new Error('Unknown dashboard section.');
-      navigate(input.section);
-      return { section: input.section, mode: 'preview' };
+function listen(reference, onData, context) {
+  return onSnapshot(reference, onData, error => fail(error, `Could not load ${context}`));
+}
+
+async function start(user) {
+  clearListeners();
+  $('authGate').textContent = 'Checking your AVNT account…';
+  try {
+    const [venue, business] = await Promise.all([
+      getDoc(doc(db, 'venues', user.uid)),
+      getDoc(doc(db, 'businessUsers', user.uid)),
+    ]);
+    if (!venue.exists() || !business.exists() || business.data().accountType !== 'venue') {
+      await signOut(auth);
+      $('authGate').textContent = 'This login does not have an AVNT venue dashboard. Returning to sign in…';
+      setTimeout(() => location.replace('../client-login.html'), 1800);
+      return;
     }
-  })).catch(() => {});
+    state.uid = user.uid;
+    state.venue = venue.data();
+    $('accountEmail').textContent = user.email || '';
+    $('authGate').hidden = true;
+    $('appShell').hidden = false;
+    renderVenue();
 
-  Promise.resolve(modelContext.registerTool({
-    name: 'filter_menu_preview',
-    title: 'Filter the preview menu',
-    description: 'Open the Menu section and filter its temporary preview rows by category or search text.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        category: { type: 'string', enum: ['all', 'cocktails', 'spirits', 'beer', 'non-alcoholic'] },
-        search: { type: 'string', maxLength: 80 }
+    state.unsubscribers.push(listen(venueRef(), snapshot => {
+      if (!snapshot.exists()) { $('appShell').hidden = true; $('authGate').hidden = false; $('authGate').textContent = 'Venue account no longer available.'; return; }
+      state.venue = snapshot.data();
+      renderVenue(); renderNights(); renderAnalytics();
+    }, 'venue'));
+    state.unsubscribers.push(listen(drinksRef(), snapshot => {
+      state.drinks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      renderMenu();
+    }, 'menu'));
+    state.unsubscribers.push(listen(nightsRef(), snapshot => {
+      state.nights = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      if (!state.selectedNightId || !state.nights.some(night => night.id === state.selectedNightId)) {
+        selectNight(state.venue?.activeNightId || state.nights[0]?.id || null);
+      } else renderNights();
+    }, 'nights'));
+    state.unsubscribers.push(onSnapshot(
+      query(collection(db, 'venues', state.uid, 'orders'), orderBy('createdAt', 'desc'), limit(1000)),
+      snapshot => {
+        state.orders = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+        state.ordersLoaded = true; state.ordersError = false; renderAnalytics();
       },
-      additionalProperties: false
-    },
-    annotations: { readOnlyHint: true, untrustedContentHint: false },
-    execute(input = {}) {
-      const category = input.category || 'all';
-      if (!['all', 'cocktails', 'spirits', 'beer', 'non-alcoholic'].includes(category)) throw new Error('Unknown menu category.');
-      activeFilter = category;
-      menuSearch.value = typeof input.search === 'string' ? input.search.slice(0, 80) : '';
-      document.querySelectorAll('.filter-tabs button').forEach(item => item.classList.toggle('active', item.dataset.filter === activeFilter));
-      navigate('menu');
-      filterMenu();
-      return { category: activeFilter, search: menuSearch.value, visibleItems: menuRows.filter(row => row.style.display !== 'none').length, mode: 'preview' };
-    }
-  })).catch(() => {});
+      error => { state.ordersError = true; fail(error, 'Could not load sales'); renderAnalytics(); }
+    ));
+  } catch (error) {
+    console.error('Could not verify AVNT owner account', error);
+    $('authGate').textContent = 'Could not verify your venue account. Refresh to try again.';
+  }
 }
+
+function renderVenue() {
+  const venue = state.venue || {};
+  const name = venue.venueName || venue.businessName || 'Your venue';
+  $('sidebarVenue').textContent = name;
+  $('topVenue').textContent = name;
+  if (state.settingsDirty || document.activeElement?.closest('#settingsForm')) return;
+  $('settingVenueName').value = name === 'Your venue' ? '' : name;
+  const tax = venue.venueTaxRateBps ?? venue.tax?.venueTaxRateBps ?? venue.tax?.salesTaxRateBps;
+  $('settingTaxRate').value = Number.isFinite(Number(tax)) && tax !== undefined ? `${(Number(tax) / 100).toFixed(2)}%` : 'Not set';
+  $('settingVenuePaysFees').checked = venue.venuePaysPOSFees === true;
+  $('settingGratuityEnabled').checked = venue.automaticGratuityEnabled === true;
+  $('settingGratuityRate').value = String([500, 1000, 1500, 2000].includes(Number(venue.automaticGratuityRateBps)) ? venue.automaticGratuityRateBps : 1000);
+  $('settingTrainingMode').checked = venue.posTrainingModeEnabled === true;
+}
+
+function setPage(page) {
+  document.querySelectorAll('.page').forEach(item => item.classList.toggle('active', item.id === page));
+  document.querySelectorAll('[data-page]').forEach(item => {
+    const active = item.dataset.page === page;
+    item.classList.toggle('active', active);
+    if (active) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
+  });
+  document.querySelector('.sidebar').classList.remove('open');
+  $('mobileNav').setAttribute('aria-expanded', 'false');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderAnalytics() {
+  if (!state.ordersLoaded || state.ordersError) {
+    $('analyticsNotice').hidden = false;
+    $('analyticsNotice').textContent = state.ordersError ? 'Sales data could not be loaded. Check your connection and refresh.' : 'Loading sales from AVNT…';
+    return;
+  }
+  const zone = state.venue?.timeZone || state.venue?.timezone || 'America/New_York';
+  let metrics;
+  try { metrics = calculateMetrics(state.orders, state.period, { timeZone: zone }); }
+  catch { metrics = calculateMetrics(state.orders, state.period); }
+  $('analyticsNotice').hidden = state.orders.length < 1000;
+  $('analyticsNotice').textContent = state.orders.length >= 1000 ? 'Showing analytics from the most recent 1,000 order records. Older sales may be excluded.' : '';
+  $('periodLabel').textContent = state.period === 'tonight' ? 'Tonight · venue time' : `Last ${state.period} days`;
+  $('grossSales').textContent = money(metrics.salesCents);
+  $('grossCollected').textContent = money(metrics.chargedCents);
+  $('refunds').textContent = money(metrics.refundedCents);
+  $('netCollected').textContent = money(metrics.netCollectedCents);
+  $('orderCount').textContent = String(metrics.orders);
+  $('itemsSold').textContent = String(metrics.items);
+  $('averageSale').textContent = money(metrics.averageSaleCents);
+  $('tips').textContent = money(metrics.tipsCents);
+  $('venueTax').textContent = money(metrics.venueTaxCents);
+  $('customerFees').textContent = money(metrics.customerFeeCents);
+
+  const chart = $('salesChart'); chart.replaceChildren();
+  if (!metrics.dailySales.length) chart.append(node('span', 'empty', 'No sales yet for this period.'));
+  else {
+    const max = Math.max(...metrics.dailySales.map(([, amount]) => amount), 1);
+    metrics.dailySales.forEach(([day, amount]) => {
+      const bar = node('div', 'bar');
+      bar.style.height = `${Math.max(5, Math.round(amount / max * 100))}%`;
+      bar.title = `${day}: ${money(amount)}`;
+      bar.append(node('span', '', day.slice(5))); chart.append(bar);
+    });
+  }
+  const sellers = $('bestSellers'); sellers.replaceChildren();
+  if (!metrics.topSellers.length) sellers.append(node('p', 'empty-state', 'No paid items in this period.'));
+  metrics.topSellers.forEach(seller => {
+    const row = node('div', 'list-row');
+    row.append(node('span', 'name', seller.name), node('span', 'detail', `${seller.quantity} sold`), node('strong', '', money(seller.revenueCents)));
+    sellers.append(row);
+  });
+  const recent = $('recentSales'); recent.replaceChildren();
+  if (!metrics.ordersList.length) recent.append(node('p', 'empty-state', 'No paid orders in this period.'));
+  metrics.ordersList.slice(0, 8).forEach(order => {
+    const row = node('div', 'list-row');
+    row.append(node('span', 'name', `Order ${order.orderCode || String(order.id || '').slice(0, 6)}`),
+      node('span', 'detail', order.saleDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+      node('strong', '', money(order.chargedCents)));
+    recent.append(row);
+  });
+}
+
+function thumbnail(url, label) {
+  const container = node('span', 'thumb', label.slice(0, 1).toUpperCase());
+  if (typeof url === 'string' && /^https:\/\//i.test(url)) {
+    const image = node('img'); image.src = url; image.alt = ''; image.loading = 'lazy';
+    image.addEventListener('load', () => { container.textContent = ''; container.append(image); });
+  }
+  return container;
+}
+
+function itemButton(label, handler) {
+  const button = node('button', '', label); button.type = 'button'; button.addEventListener('click', handler); return button;
+}
+
+function renderMenu() {
+  const search = $('menuSearch').value.trim().toLowerCase();
+  const category = $('menuCategory').value;
+  const items = state.drinks.filter(drink => (category === 'all' || drink.category === category) && String(drink.name || '').toLowerCase().includes(search))
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  $('menuSummary').textContent = `${items.length} shown · ${state.drinks.length} menu items`;
+  const list = $('menuList'); list.replaceChildren();
+  if (!items.length) list.append(node('p', 'empty-state', 'No menu items match your filters.'));
+  items.forEach(drink => {
+    const row = node('div', 'item-card');
+    const main = node('span', 'item-main');
+    main.append(node('strong', '', drink.name || 'Untitled item'), node('small', '', categoryName(drink.category)));
+    const pricing = drink.category === 'modifiers' && drink.modifierPricingType === 'percentage'
+      ? `${(Number(drink.modifierPercentageBps) / 100).toFixed(2)}%` : dollars(drink.price);
+    row.append(thumbnail(drink.imageUrl, drink.name || 'Item'), main, node('strong', 'price', pricing));
+    if (drink.isAvailable === false) row.append(node('span', 'disabled-tag', 'Hidden'));
+    row.append(itemButton('Edit', () => openEditor('drink', drink)));
+    row.append(itemButton(drink.isAvailable === false ? 'Show' : 'Hide', async () => {
+      try { await updateDoc(doc(drinksRef(), drink.id), { isAvailable: drink.isAvailable === false, updatedAt: serverTimestamp() }); message('Menu availability updated.'); }
+      catch (error) { fail(error, 'Could not update availability'); }
+    }));
+    list.append(row);
+  });
+}
+
+function selectNight(id) {
+  state.selectedNightId = id && state.nights.some(night => night.id === id) ? id : null;
+  state.specialUnsubscribe?.(); state.specialUnsubscribe = null; state.specials = [];
+  renderNights();
+  if (state.selectedNightId) {
+    state.specialUnsubscribe = listen(specialsRef(state.selectedNightId), snapshot => {
+      state.specials = snapshot.docs.map(item => ({ id: item.id, ...item.data() })); renderSpecials();
+    }, 'night specials');
+  }
+}
+
+function renderNights() {
+  const list = $('nightList'); list.replaceChildren();
+  if (!state.nights.length) list.append(node('p', 'empty-state', 'No nights yet. Add one to get started.'));
+  state.nights.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).forEach(night => {
+    const row = itemButton('', () => selectNight(night.id));
+    row.className = `item-card ${night.id === state.selectedNightId ? 'selected' : ''}`;
+    const main = node('span', 'item-main');
+    main.append(node('strong', '', night.name || 'Untitled night'), node('small', '', night.id === state.venue?.activeNightId ? 'Active on POS' : night.note || ''));
+    row.append(main); list.append(row);
+  });
+  const selected = state.nights.find(night => night.id === state.selectedNightId);
+  $('selectedNightName').textContent = selected?.name || 'Choose a night';
+  $('selectedNightNote').textContent = selected?.note || '';
+  for (const id of ['editNight', 'activateNight', 'addSpecial']) $(id).hidden = !selected;
+  if (selected) {
+    $('activateNight').textContent = selected.id === state.venue?.activeNightId ? 'Active on POS' : 'Use on POS';
+    $('activateNight').disabled = selected.id === state.venue?.activeNightId;
+  }
+  renderSpecials();
+}
+
+function renderSpecials() {
+  const list = $('specialList'); list.replaceChildren();
+  if (!state.selectedNightId) { list.append(node('p', 'empty-state', 'Select a night to view its specials.')); return; }
+  if (!state.specials.length) list.append(node('p', 'empty-state', 'No specials for this night yet.'));
+  state.specials.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).forEach(special => {
+    const row = node('div', 'item-card'); const main = node('span', 'item-main');
+    main.append(node('strong', '', special.name || 'Untitled special'), node('small', '', `${categoryName(special.category)}${special.description ? ' · ' + special.description : ''}`));
+    row.append(thumbnail(special.imageUrl, special.name || 'Special'), main, node('strong', 'price', dollars(special.price)));
+    if (special.isAvailable === false) row.append(node('span', 'disabled-tag', 'Hidden'));
+    row.append(itemButton('Edit', () => openEditor('special', special)));
+    row.append(itemButton(special.isAvailable === false ? 'Show' : 'Hide', async () => {
+      try { await updateDoc(doc(specialsRef(state.selectedNightId), special.id), { isAvailable: special.isAvailable === false, updatedAt: serverTimestamp() }); message('Special availability updated.'); }
+      catch (error) { fail(error, 'Could not update special'); }
+    }));
+    list.append(row);
+  });
+}
+
+function field(label, name, value = '', options = {}) {
+  const wrapper = node('label', options.checkbox ? 'checkbox-field' : '');
+  const input = options.choices ? node('select') : node(options.multiline ? 'textarea' : 'input');
+  input.name = name;
+  if (options.checkbox) { input.type = 'checkbox'; input.checked = value === true; }
+  else if (options.choices) options.choices.forEach(choice => {
+    const option = node('option', '', choice.label || categoryName(choice.value)); option.value = choice.value; input.append(option);
+  });
+  else if (!options.multiline) input.type = options.type || 'text';
+  if (!options.checkbox) input.value = value ?? '';
+  if (options.required) input.required = true;
+  if (options.min !== undefined) input.min = String(options.min);
+  if (options.max !== undefined) input.max = String(options.max);
+  if (options.step !== undefined) input.step = String(options.step);
+  if (options.maxLength) input.maxLength = options.maxLength;
+  if (options.checkbox) wrapper.append(input, node('span', '', label));
+  else wrapper.append(node('span', '', label), input);
+  return wrapper;
+}
+
+function openEditor(kind, item = null) {
+  state.editor = { kind, item, nightId: state.selectedNightId };
+  $('editorTitle').textContent = `${item ? 'Edit' : 'Add'} ${kind === 'drink' ? 'menu item' : kind === 'night' ? 'night' : 'special'}`;
+  $('editorError').hidden = true;
+  const fields = $('editorFields'); fields.replaceChildren();
+  fields.append(field('Name', 'name', item?.name || '', { required: true, maxLength: 80 }));
+  if (kind === 'drink') {
+    fields.append(field('Category', 'category', item?.category || 'cocktails', { choices: categories.map(value => ({ value })) }));
+    fields.append(field('Price ($)', 'price', item?.price ?? 0, { type: 'number', min: 0, max: 100000, step: .01, required: true }));
+    fields.append(field('Ingredients (comma-separated)', 'ingredients', Array.isArray(item?.ingredients) ? item.ingredients.join(', ') : '', { multiline: true }));
+    fields.append(field('Modifier pricing', 'modifierPricingType', item?.modifierPricingType || 'fixed', { choices: [{ value: 'fixed', label: 'Fixed amount' }, { value: 'percentage', label: 'Percentage' }] }));
+    fields.append(field('Modifier percentage', 'modifierPercentage', item?.modifierPercentageBps ? (Number(item.modifierPercentageBps) / 100).toFixed(2) : '', { type: 'number', min: .01, max: 500, step: .01 }));
+  } else if (kind === 'night') {
+    fields.append(field('Description or note', 'note', item?.note || '', { multiline: true }));
+  } else {
+    fields.append(field('Category', 'category', item?.category || 'cocktail', { choices: ['beer', 'shot', 'cocktail'].map(value => ({ value })) }));
+    fields.append(field('Price ($)', 'price', item?.price ?? 0, { type: 'number', min: 0, max: 100000, step: .01, required: true }));
+    fields.append(field('Description', 'description', item?.description || '', { multiline: true }));
+  }
+  $('editorDialog').showModal();
+}
+
+async function saveEditor(event) {
+  event.preventDefault();
+  const { kind, item, nightId } = state.editor || {};
+  if (!kind) return;
+  const form = new FormData($('editorForm'));
+  const name = String(form.get('name') || '').trim();
+  if (!name) return;
+  const save = $('saveEditor'); save.disabled = true; save.textContent = 'Saving…';
+  $('editorError').hidden = true;
+  try {
+    const updatedAt = serverTimestamp();
+    if (kind === 'drink') {
+      const category = String(form.get('category'));
+      const percentage = category === 'modifiers' && form.get('modifierPricingType') === 'percentage';
+      const rate = Number(form.get('modifierPercentage'));
+      const price = Number(form.get('price'));
+      if (percentage && (!Number.isFinite(rate) || rate < .01 || rate > 500)) throw new Error('Enter a modifier percentage between 0.01% and 500%.');
+      if (!Number.isFinite(price) || price < 0) throw new Error('Enter a valid price.');
+      const ingredients = String(form.get('ingredients') || '').split(',').map(value => value.trim()).filter(Boolean);
+      const data = { name, category, price: percentage ? 0 : Math.round(price * 100) / 100, updatedAt };
+      if (category === 'modifiers') {
+        data.modifierPricingType = percentage ? 'percentage' : 'fixed';
+        if (percentage) data.modifierPercentageBps = Math.round(rate * 100);
+        else if (item) data.modifierPercentageBps = deleteField();
+      } else if (item?.category === 'modifiers') {
+        data.modifierPricingType = deleteField(); data.modifierPercentageBps = deleteField();
+      }
+      if (item) {
+        data.ingredients = ingredients.length ? ingredients : deleteField();
+        await updateDoc(doc(drinksRef(), item.id), data);
+      } else await addDoc(drinksRef(), { ...data, ingredients, isAvailable: true, createdAt: serverTimestamp() });
+    } else if (kind === 'night') {
+      const note = String(form.get('note') || '').trim();
+      if (item) {
+        await updateDoc(nightRef(item.id), { name, note: note || deleteField(), updatedAt });
+        if (state.venue?.activeNightId === item.id) await updateDoc(venueRef(), { activeNightName: name, updatedAt: serverTimestamp() });
+      } else await addDoc(nightsRef(), { name, note, createdAt: serverTimestamp(), updatedAt });
+    } else {
+      if (!nightId) throw new Error('Choose a night first.');
+      const category = String(form.get('category'));
+      const price = Number(form.get('price'));
+      if (!['beer', 'shot', 'cocktail'].includes(category) || !Number.isFinite(price) || price < 0) throw new Error('Enter a valid special and price.');
+      const description = String(form.get('description') || '').trim();
+      const data = { name, category, price: Math.round(price * 100) / 100, updatedAt };
+      if (item) await updateDoc(doc(specialsRef(nightId), item.id), { ...data, description: description || deleteField() });
+      else await addDoc(specialsRef(nightId), { ...data, description, imageName: '', isAvailable: true, createdAt: serverTimestamp() });
+    }
+    $('editorDialog').close(); state.editor = null; message('Saved to AVNT.');
+  } catch (error) {
+    $('editorError').textContent = error.message?.startsWith('Enter ') || error.message === 'Choose a night first.' ? error.message : 'Could not save this change. Please try again.';
+    $('editorError').hidden = false;
+    console.error('Could not save editor', error);
+  } finally { save.disabled = false; save.textContent = 'Save'; }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const name = $('settingVenueName').value.trim();
+  if (!name) return;
+  const newFees = $('settingVenuePaysFees').checked;
+  const newTraining = $('settingTrainingMode').checked;
+  const warnings = [];
+  if (newFees !== (state.venue?.venuePaysPOSFees === true)) warnings.push(`POS fees will be paid by the ${newFees ? 'venue' : 'customer'} on future checkouts.`);
+  if (newTraining !== (state.venue?.posTrainingModeEnabled === true)) warnings.push(`Training mode will be ${newTraining ? 'turned on (real payments stop)' : 'turned off (real payments resume)'}.`);
+  if (warnings.length && !confirm(`${warnings.join('\n')}\n\nSave these changes?`)) return;
+  const save = $('saveSettings'); save.disabled = true; save.textContent = 'Saving…';
+  try {
+    await updateDoc(venueRef(), { venueName: name, venuePaysPOSFees: newFees,
+      automaticGratuityEnabled: $('settingGratuityEnabled').checked,
+      automaticGratuityRateBps: Number($('settingGratuityRate').value),
+      posTrainingModeEnabled: newTraining, updatedAt: serverTimestamp() });
+    state.settingsDirty = false;
+    $('settingsStatus').textContent = 'Saved to AVNT.';
+    message('Venue settings saved.');
+  } catch (error) { fail(error, 'Could not save settings'); $('settingsStatus').textContent = 'Could not save. Try again.'; }
+  finally { save.disabled = false; save.textContent = 'Save settings'; }
+}
+
+onAuthStateChanged(auth, user => {
+  if (!user) { clearListeners(); location.replace('../client-login.html'); return; }
+  if (state.uid === user.uid && !$('appShell').hidden) return;
+  start(user);
+});
+document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => setPage(button.dataset.page)));
+document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
+  state.period = button.dataset.period;
+  document.querySelectorAll('[data-period]').forEach(item => item.classList.toggle('active', item === button));
+  renderAnalytics();
+}));
+$('mobileNav').addEventListener('click', () => {
+  const open = document.querySelector('.sidebar').classList.toggle('open');
+  $('mobileNav').setAttribute('aria-expanded', String(open));
+});
+$('signOut').addEventListener('click', async () => { clearListeners(); await signOut(auth); location.replace('../client-login.html'); });
+$('menuSearch').addEventListener('input', renderMenu);
+$('menuCategory').addEventListener('change', renderMenu);
+$('addDrink').addEventListener('click', () => openEditor('drink'));
+$('addNight').addEventListener('click', () => openEditor('night'));
+$('editNight').addEventListener('click', () => openEditor('night', state.nights.find(night => night.id === state.selectedNightId)));
+$('addSpecial').addEventListener('click', () => openEditor('special'));
+$('activateNight').addEventListener('click', async () => {
+  const night = state.nights.find(item => item.id === state.selectedNightId);
+  if (!night) return;
+  try { await updateDoc(venueRef(), { activeNightId: night.id, activeNightName: night.name, updatedAt: serverTimestamp() }); message(`${night.name} is active on the POS.`); }
+  catch (error) { fail(error, 'Could not activate night'); }
+});
+$('settingsForm').addEventListener('input', () => { state.settingsDirty = true; $('settingsStatus').textContent = 'Unsaved changes'; });
+$('settingsForm').addEventListener('submit', saveSettings);
+$('editorForm').addEventListener('submit', saveEditor);
+$('closeEditor').addEventListener('click', () => $('editorDialog').close());
+$('cancelEditor').addEventListener('click', () => $('editorDialog').close());
