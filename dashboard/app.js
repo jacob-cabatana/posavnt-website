@@ -8,7 +8,24 @@ const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', curre
 const dollars = amount => money(Math.round((Number(amount) || 0) * 100));
 const categories = ['cocktails', 'shots', 'beer', 'seltzers', 'wine', 'food', 'non_alcoholic', 'hookah', 'specials', 'modifiers'];
 const categoryName = value => ({ non_alcoholic: 'Non-alcoholic' })[value] || (value ? value[0].toUpperCase() + value.slice(1) : 'Other');
-const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: 'tonight', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
+const bundledDrinkImages = new Set([
+  'bud-light', 'corona', 'cosmopolitan', 'dirty-shirley', 'draft-beer', 'espresso-martini',
+  'green-tea-shot', 'heineken', 'high-noon', 'jack-and-coke', 'jager-bomb', 'lemon-drop',
+  'long-island', 'margarita', 'mojito', 'old-fashioned', 'michelob-ultra', 'miller-lite',
+  'red-bull', 'rum-and-coke', 'rum-pineapple', 'rum-shot', 'stella-artois', 'sun-cruiser',
+  'tequila-pineapple', 'tequila-shot', 'tequila-soda', 'tequila-sunrise', 'vodka-cranberry',
+  'vodka-red-bull', 'vodka-shot', 'vodka-soda', 'vodka-sprite', 'water', 'whiskey-shot',
+  'whiskey-sour', 'white-tea-shot', 'yuengling', 'hookah',
+]);
+function bundledDrinkImage(drink) {
+  for (const source of [drink.imagePath, drink.imageUrl, drink.name]) {
+    const candidate = String(source || '').split('?')[0].split('/').pop().replace(/\.[^.]+$/, '')
+      .toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (bundledDrinkImages.has(candidate)) return `./drink-images/${candidate}.png`;
+  }
+  return drink.category === 'hookah' ? './drink-images/hookah.png' : null;
+}
+const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: '7', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
 let toastTimer;
 
 function node(tag, className, text) {
@@ -63,7 +80,6 @@ async function start(user) {
     }
     state.uid = user.uid;
     state.venue = venue.data();
-    $('accountEmail').textContent = user.email || '';
     $('authGate').hidden = true;
     $('appShell').hidden = false;
     renderVenue();
@@ -100,8 +116,9 @@ async function start(user) {
 function renderVenue() {
   const venue = state.venue || {};
   const name = venue.venueName || venue.businessName || 'Your venue';
-  $('sidebarVenue').textContent = name;
   $('topVenue').textContent = name;
+  $('setupVenueName').textContent = name === 'Your venue' ? '' : name;
+  renderSetupNight();
   if (state.settingsDirty || document.activeElement?.closest('#settingsForm')) return;
   $('settingVenueName').value = name === 'Your venue' ? '' : name;
   const tax = venue.venueTaxRateBps ?? venue.tax?.venueTaxRateBps ?? venue.tax?.salesTaxRateBps;
@@ -130,40 +147,42 @@ function renderAnalytics() {
     $('analyticsNotice').textContent = state.ordersError ? 'Sales data could not be loaded. Check your connection and refresh.' : 'Loading sales from AVNT…';
     return;
   }
-  const zone = state.venue?.timeZone || state.venue?.timezone || 'America/New_York';
+  let zone = state.venue?.timeZone || state.venue?.timezone || 'America/New_York';
   let metrics;
   try { metrics = calculateMetrics(state.orders, state.period, { timeZone: zone }); }
-  catch { metrics = calculateMetrics(state.orders, state.period); }
+  catch { zone = 'America/New_York'; metrics = calculateMetrics(state.orders, state.period); }
   $('analyticsNotice').hidden = state.orders.length < 1000;
   $('analyticsNotice').textContent = state.orders.length >= 1000 ? 'Showing analytics from the most recent 1,000 order records. Older sales may be excluded.' : '';
-  $('periodLabel').textContent = state.period === 'tonight' ? 'Tonight · venue time' : `Last ${state.period} days`;
+  $('periodEyebrow').textContent = state.period === 'tonight' ? '⌁  CURRENT NIGHT' : `⌁  LAST ${state.period} DAYS`;
   $('grossSales').textContent = money(metrics.salesCents);
   $('grossCollected').textContent = money(metrics.chargedCents);
+  $('mixTotal').textContent = money(metrics.chargedCents);
   $('refunds').textContent = money(metrics.refundedCents);
   $('netCollected').textContent = money(metrics.netCollectedCents);
   $('orderCount').textContent = String(metrics.orders);
   $('itemsSold').textContent = String(metrics.items);
   $('averageSale').textContent = money(metrics.averageSaleCents);
   $('tips').textContent = money(metrics.tipsCents);
-  $('venueTax').textContent = money(metrics.venueTaxCents);
-  $('customerFees').textContent = money(metrics.customerFeeCents);
-
-  const chart = $('salesChart'); chart.replaceChildren();
-  if (!metrics.dailySales.length) chart.append(node('span', 'empty', 'No sales yet for this period.'));
-  else {
-    const max = Math.max(...metrics.dailySales.map(([, amount]) => amount), 1);
-    metrics.dailySales.forEach(([day, amount]) => {
-      const bar = node('div', 'bar');
-      bar.style.height = `${Math.max(5, Math.round(amount / max * 100))}%`;
-      bar.title = `${day}: ${money(amount)}`;
-      bar.append(node('span', '', day.slice(5))); chart.append(bar);
-    });
-  }
+  $('tipRate').textContent = `${metrics.salesCents ? (metrics.tipsCents / metrics.salesCents * 100).toFixed(1) : '0.0'}% of sales`;
+  $('salesTax').textContent = money(metrics.venueTaxCents + metrics.feeTaxCents);
+  $('sellerPeriod').textContent = `Ranked by drink revenue · ${state.period === 'tonight' ? 'tonight' : `${state.period} days`}`;
+  $('sellerCount').textContent = `${metrics.items} drinks`;
+  renderTrend(metrics, zone);
+  renderMix(metrics);
   const sellers = $('bestSellers'); sellers.replaceChildren();
   if (!metrics.topSellers.length) sellers.append(node('p', 'empty-state', 'No paid items in this period.'));
-  metrics.topSellers.forEach(seller => {
-    const row = node('div', 'list-row');
-    row.append(node('span', 'name', seller.name), node('span', 'detail', `${seller.quantity} sold`), node('strong', '', money(seller.revenueCents)));
+  const topRevenue = Math.max(metrics.topSellers[0]?.revenueCents || 0, 1);
+  metrics.topSellers.forEach((seller, index) => {
+    const row = node('div', 'seller-row');
+    const rank = node('span', 'seller-rank', String(index + 1));
+    const main = node('div', 'seller-main');
+    const nameRow = node('div', 'seller-name-row');
+    nameRow.append(node('strong', '', seller.name), node('small', '', `${seller.quantity} sold`));
+    const track = node('div', 'seller-track');
+    const fill = node('span', 'seller-fill');
+    fill.style.width = `${Math.max(4, seller.revenueCents / topRevenue * 100)}%`;
+    track.append(fill); main.append(nameRow, track);
+    row.append(rank, main, node('b', 'seller-amount', money(seller.revenueCents)));
     sellers.append(row);
   });
   const recent = $('recentSales'); recent.replaceChildren();
@@ -174,6 +193,98 @@ function renderAnalytics() {
       node('span', 'detail', order.saleDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
       node('strong', '', money(order.chargedCents)));
     recent.append(row);
+  });
+}
+
+function zonedParts(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  return Object.fromEntries(parts.map(part => [part.type, part.value]));
+}
+
+function dayKey(date, timeZone) {
+  const parts = zonedParts(date, timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function shiftedDay(key, offset) {
+  const date = new Date(`${key}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+}
+
+function trendSeries(metrics, timeZone) {
+  const now = new Date();
+  if (state.period === 'tonight') {
+    const hour = Number(zonedParts(now, timeZone).hour);
+    const finalSlot = Math.min(12, Math.max(7, (hour + 6) % 24 + 2));
+    const values = Array(finalSlot).fill(0);
+    metrics.ordersList.forEach(order => {
+      const orderHour = Number(zonedParts(order.saleDate, timeZone).hour);
+      const slot = (orderHour + 6) % 24;
+      if (slot < values.length) values[slot] += order.subtotalCents;
+    });
+    return values.map((value, slot) => ({ label: `${(slot + 5) % 12 + 1}${slot < 6 ? 'p' : 'a'}`, value }));
+  }
+  const count = Number(state.period);
+  const today = dayKey(now, timeZone);
+  const byDay = new Map(metrics.dailySales);
+  return Array.from({ length: count }, (_, index) => {
+    const key = shiftedDay(today, index - count + 1);
+    const date = new Date(`${key}T12:00:00Z`);
+    const label = count === 7
+      ? new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(date)
+      : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date);
+    return { label, value: byDay.get(key) || 0 };
+  });
+}
+
+function renderTrend(metrics, timeZone) {
+  const chart = $('salesChart'); chart.replaceChildren();
+  const points = trendSeries(metrics, timeZone);
+  const width = 700, top = 12, bottom = 162, max = Math.max(...points.map(point => point.value), 1);
+  const coordinates = points.map((point, index) => ({ x: points.length < 2 ? 0 : index * width / (points.length - 1), y: bottom - point.value / max * (bottom - top) }));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 700 175'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+  const path = (d, className) => { const element = document.createElementNS('http://www.w3.org/2000/svg', 'path'); element.setAttribute('d', d); element.setAttribute('class', className); svg.append(element); };
+  for (let index = 0; index <= 3; index++) path(`M0 ${top + index * 50} H700`, 'trend-grid-line');
+  const line = coordinates.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+  path(`${line} L700 ${bottom} L0 ${bottom} Z`, 'trend-area');
+  path(line, 'trend-line');
+  coordinates.forEach((point, index) => {
+    if (!points[index].value) return;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', point.x); circle.setAttribute('cy', point.y); circle.setAttribute('r', 3.5); circle.setAttribute('class', 'trend-point'); svg.append(circle);
+  });
+  chart.append(svg);
+  const labels = node('div', 'trend-labels');
+  const indices = state.period === '30' ? [0, 5, 11, 17, 23, 29] : points.map((_, index) => index);
+  indices.forEach(index => labels.append(node('span', '', points[index]?.label || '')));
+  chart.append(labels);
+}
+
+function renderMix(metrics) {
+  const slices = [
+    { label: 'Drink sales', value: metrics.salesCents, color: '#a447f5' },
+    { label: 'Tips', value: metrics.tipsCents, color: '#2968df' },
+    { label: 'Sales tax', value: metrics.venueTaxCents + metrics.feeTaxCents, color: '#ffb43b' },
+    { label: 'POS fees', value: metrics.customerFeeCents, color: '#35c79a' },
+  ];
+  const partsTotal = slices.reduce((sum, slice) => sum + slice.value, 0);
+  if (metrics.chargedCents > partsTotal) slices.push({ label: 'Other', value: metrics.chargedCents - partsTotal, color: '#888' });
+  const total = Math.max(partsTotal, metrics.chargedCents, 1);
+  let start = 0;
+  const stops = slices.filter(slice => slice.value > 0).map(slice => {
+    const end = start + slice.value / total * 100;
+    const stop = `${slice.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+    start = end; return stop;
+  });
+  $('mixDonut').style.background = stops.length ? `conic-gradient(${stops.join(',')})` : 'conic-gradient(#292929 0 100%)';
+  const legend = $('salesMix'); legend.replaceChildren();
+  slices.filter(slice => slice.value > 0 || slice.label !== 'Other').forEach(slice => {
+    const row = node('div', 'mix-legend-row');
+    const swatch = node('i'); swatch.style.background = slice.color;
+    row.append(swatch, node('span', '', slice.label), node('strong', '', money(slice.value)));
+    legend.append(row);
   });
 }
 
@@ -199,20 +310,43 @@ function renderMenu() {
   const list = $('menuList'); list.replaceChildren();
   if (!items.length) list.append(node('p', 'empty-state', 'No menu items match your filters.'));
   items.forEach(drink => {
-    const row = node('div', 'item-card');
-    const main = node('span', 'item-main');
-    main.append(node('strong', '', drink.name || 'Untitled item'), node('small', '', categoryName(drink.category)));
+    const row = node('article', `menu-tile${drink.isAvailable === false ? ' unavailable' : ''}`);
     const pricing = drink.category === 'modifiers' && drink.modifierPricingType === 'percentage'
       ? `${(Number(drink.modifierPercentageBps) / 100).toFixed(2)}%` : dollars(drink.price);
-    row.append(thumbnail(drink.imageUrl, drink.name || 'Item'), main, node('strong', 'price', pricing));
-    if (drink.isAvailable === false) row.append(node('span', 'disabled-tag', 'Hidden'));
-    row.append(itemButton('Edit', () => openEditor('drink', drink)));
-    row.append(itemButton(drink.isAvailable === false ? 'Show' : 'Hide', async () => {
+    const main = itemButton('', () => openEditor('drink', drink));
+    main.className = 'menu-tile-main';
+    main.setAttribute('aria-label', `Edit ${drink.name || 'menu item'}, ${pricing}`);
+    const visual = node('span', 'menu-photo');
+    visual.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 9h38L44 35H20L13 9Zm19 26v16m-12 4h24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+    const fallbackImage = bundledDrinkImage(drink);
+    const remoteImage = typeof drink.imageUrl === 'string' && /^https:\/\//i.test(drink.imageUrl) ? drink.imageUrl : null;
+    if (remoteImage || fallbackImage) {
+      const image = node('img'); image.src = remoteImage || fallbackImage; image.alt = ''; image.loading = 'lazy';
+      image.addEventListener('error', () => {
+        if (fallbackImage && image.src !== new URL(fallbackImage, location.href).href) image.src = fallbackImage;
+        else image.remove();
+      });
+      visual.append(image);
+    }
+    const copy = node('span', 'menu-tile-copy');
+    copy.append(node('strong', '', drink.name || 'Untitled item'), node('span', '', pricing));
+    main.append(visual, node('span', 'menu-shade'), copy);
+    if (drink.isAvailable === false) main.append(node('span', 'menu-unavailable', 'UNAVAILABLE'));
+    const footer = node('div', 'menu-tile-footer');
+    footer.append(node('span', '', categoryName(drink.category)));
+    footer.append(itemButton('Edit', () => openEditor('drink', drink)));
+    footer.append(itemButton(drink.isAvailable === false ? 'Show' : 'Hide', async () => {
       try { await updateDoc(doc(drinksRef(), drink.id), { isAvailable: drink.isAvailable === false, updatedAt: serverTimestamp() }); message('Menu availability updated.'); }
       catch (error) { fail(error, 'Could not update availability'); }
     }));
+    row.append(main, footer);
     list.append(row);
   });
+}
+
+function renderSetupNight() {
+  const active = state.nights.find(night => night.id === state.venue?.activeNightId);
+  $('setupActiveNight').textContent = active?.name || (state.nights.length ? 'No night selected' : 'No saved nights');
 }
 
 function selectNight(id) {
@@ -227,6 +361,7 @@ function selectNight(id) {
 }
 
 function renderNights() {
+  renderSetupNight();
   const list = $('nightList'); list.replaceChildren();
   if (!state.nights.length) list.append(node('p', 'empty-state', 'No nights yet. Add one to get started.'));
   state.nights.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).forEach(night => {
@@ -405,6 +540,7 @@ $('menuSearch').addEventListener('input', renderMenu);
 $('menuCategory').addEventListener('change', renderMenu);
 $('addDrink').addEventListener('click', () => openEditor('drink'));
 $('addNight').addEventListener('click', () => openEditor('night'));
+$('openNightsSetup').addEventListener('click', () => setPage('nights'));
 $('editNight').addEventListener('click', () => openEditor('night', state.nights.find(night => night.id === state.selectedNightId)));
 $('addSpecial').addEventListener('click', () => openEditor('special'));
 $('activateNight').addEventListener('click', async () => {
