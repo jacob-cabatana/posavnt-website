@@ -5,6 +5,7 @@ import { calculateMetrics } from './metrics.mjs';
 import { createHistory } from './history.mjs';
 import { createFloor } from './floor.mjs';
 import { createTimeClock } from './timeclock.mjs';
+import { createInventory, stockInfo } from './inventory.mjs';
 
 const $ = id => document.getElementById(id);
 const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100);
@@ -32,6 +33,7 @@ const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], or
 const history = createHistory({ db, getUid: () => state.uid, getVenue: () => state.venue, getOrders: () => state.orders });
 const floor = createFloor({ db, getUid: () => state.uid });
 const clock = createTimeClock({ auth, db, getUid: () => state.uid });
+const inventory = createInventory({ auth, db, getUid: () => state.uid, getDrinks: () => state.drinks, getImage: bundledDrinkImage });
 let toastTimer;
 
 function node(tag, className, text) {
@@ -58,7 +60,7 @@ function clearListeners() {
   state.unsubscribers.splice(0).forEach(unsubscribe => unsubscribe());
   state.specialUnsubscribe?.();
   state.specialUnsubscribe = null;
-  floor.stop(); clock.stop(); history.reset();
+  floor.stop(); clock.stop(); history.reset(); inventory.stop();
 }
 
 function venueRef() { return doc(db, 'venues', state.uid); }
@@ -95,7 +97,7 @@ async function start(user) {
     $('authGate').hidden = true;
     $('appShell').hidden = false;
     renderVenue();
-    floor.start(user.uid); clock.start(user.uid);
+    floor.start(user.uid); clock.start(user.uid); inventory.start(user.uid);
 
     state.unsubscribers.push(listen(venueRef(), snapshot => {
       if (!snapshot.exists()) { $('appShell').hidden = true; $('authGate').hidden = false; $('authGate').textContent = 'Venue account no longer available.'; return; }
@@ -104,7 +106,7 @@ async function start(user) {
     }, 'venue'));
     state.unsubscribers.push(listen(drinksRef(), snapshot => {
       state.drinks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-      renderMenu();
+      renderMenu(); inventory.render();
     }, 'menu'));
     state.unsubscribers.push(listen(nightsRef(), snapshot => {
       state.nights = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -152,6 +154,7 @@ function setPage(page) {
   document.querySelector('.sidebar').classList.remove('open');
   $('mobileNav').setAttribute('aria-expanded', 'false');
   if (page === 'history') history.render();
+  if (page === 'inventory') inventory.render();
   if (page === 'clock') clock.refreshStatus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -325,6 +328,7 @@ function renderMenu() {
   const list = $('menuList'); list.replaceChildren();
   if (!items.length) list.append(node('p', 'empty-state', 'No menu items match your filters.'));
   items.forEach(drink => {
+    const stock = stockInfo(drink);
     const row = node('article', `menu-tile${drink.isAvailable === false ? ' unavailable' : ''}`);
     const pricing = drink.category === 'modifiers' && drink.modifierPricingType === 'percentage'
       ? `${(Number(drink.modifierPercentageBps) / 100).toFixed(2)}%` : dollars(drink.price);
@@ -346,7 +350,9 @@ function renderMenu() {
     const copy = node('span', 'menu-tile-copy');
     copy.append(node('strong', '', drink.name || 'Untitled item'), node('span', '', pricing));
     main.append(visual, node('span', 'menu-shade'), copy);
-    if (drink.isAvailable === false) main.append(node('span', 'menu-unavailable', 'UNAVAILABLE'));
+    if (stock.soldOut || stock.enabled && stock.available === 0) main.append(node('span', 'menu-unavailable', stock.soldOut ? 'SOLD OUT' : 'IN CHECKOUT'));
+    else if (drink.isAvailable === false) main.append(node('span', 'menu-unavailable', 'UNAVAILABLE'));
+    else if (stock.low) main.append(node('span', 'menu-stock-warning', `${stock.available} left`));
     const footer = node('div', 'menu-tile-footer');
     footer.append(node('span', '', categoryName(drink.category)));
     footer.append(itemButton('Edit', () => openEditor('drink', drink)));
