@@ -1,4 +1,3 @@
-import { EmailAuthProvider, reauthenticateWithCredential } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { collection, limit, onSnapshot, orderBy, query } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
@@ -20,7 +19,7 @@ export function stockInfo(item) {
 
 export function createInventory({auth, db, getUid, getDrinks, getImage}) {
   const saveInventory = httpsCallable(getFunctions(auth.app, 'us-central1'), 'savePOSInventory');
-  let unsubscribe, selected, operationId, lastPayload, busy = false, unlockedUntil = 0;
+  let unsubscribe, selected, operationId, lastPayload, busy = false;
   const notice = text => { $('inventoryNotice').textContent = text || ''; $('inventoryNotice').hidden = !text; };
 
   function render() {
@@ -68,7 +67,7 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
     $('inventoryEnabled').checked = stock.enabled;
     $('inventoryMode').value = 'set'; $('inventoryQuantity').value = stock.quantity;
     $('inventoryThreshold').value = stock.threshold; $('inventoryReason').value = stock.enabled ? '' : 'Opening count';
-    $('inventoryPassword').value = ''; $('inventoryEditorError').hidden = true;
+    $('inventoryEditorError').hidden = true;
     updateFields(); $('inventoryDialog').showModal();
   }
 
@@ -77,7 +76,6 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
     const mode = $('inventoryMode').value;
     $('inventoryQuantityField').hidden = mode === 'settings';
     $('inventoryQuantityLabel').textContent = mode === 'set' ? 'Count on hand' : mode === 'add' ? 'Quantity received' : 'Quantity removed';
-    $('inventoryManagerAccess').hidden = Date.now() < unlockedUntil;
   }
 
   async function save(event) {
@@ -91,12 +89,6 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
     busy = true; $('inventorySave').disabled = true; $('inventorySave').textContent = 'Saving…';
     $('inventoryCancel').disabled = true; $('inventoryClose').disabled = true;
     try {
-      if (Date.now() >= unlockedUntil) {
-        const user = auth.currentUser, password = $('inventoryPassword').value;
-        if (!user?.email || !password) throw new Error('Enter the venue account password.');
-        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
-        await user.getIdToken(true); unlockedUntil = Date.now() + 270000;
-      }
       const payload = {itemId: selected.id, enabled: $('inventoryEnabled').checked,
         mode: $('inventoryEnabled').checked ? $('inventoryMode').value : 'settings',
         quantity, lowStockThreshold, expectedRevision: integer(selected.inventoryRevision), reason};
@@ -107,11 +99,10 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
       $('inventoryDialog').close(); selected = null; notice('Inventory updated.');
     } catch (error) {
       console.error('Inventory save failed', error);
-      if (error.code === 'functions/permission-denied') unlockedUntil = 0;
-      errorBox.textContent = String(error.code || '').startsWith('auth/') ? 'The password could not be verified. Try again.' : error.message || 'Could not save inventory. Try again.';
+      errorBox.textContent = error.message || 'Could not save inventory. Try again.';
       errorBox.hidden = false; updateFields();
     } finally {
-      $('inventoryPassword').value = ''; busy = false;
+      busy = false;
       $('inventorySave').disabled = false; $('inventorySave').textContent = 'Save inventory';
       $('inventoryCancel').disabled = false; $('inventoryClose').disabled = false;
     }
@@ -131,7 +122,7 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
       });
     }, () => notice('Could not load stock history. Refresh to try again.'));
   }
-  function stop() { unsubscribe?.(); unsubscribe = null; unlockedUntil = 0; selected = null; $('inventoryDialog').close(); $('inventoryChanges').replaceChildren(); }
+  function stop() { unsubscribe?.(); unsubscribe = null; selected = null; $('inventoryDialog').close(); $('inventoryChanges').replaceChildren(); }
   $('inventorySearch').addEventListener('input', render);
   $('inventoryFilter').addEventListener('change', render);
   $('inventoryEnabled').addEventListener('change', updateFields);
