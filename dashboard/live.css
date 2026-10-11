@@ -111,3 +111,82 @@
 @media(max-width:930px){.performance-grid{grid-template-columns:1fr}.performance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.mix-panel{min-height:300px}.mix-donut{width:170px}}
 @media(max-width:720px){.sidebar nav{margin-top:42px}.performance-metrics{grid-template-columns:1fr 1fr}.metric-card{min-height:88px}.menu-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.menu-tile-main{height:180px}.setup-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-tile{aspect-ratio:auto;min-height:245px}}
 @media(max-width:540px){.trend-hero{padding:20px;min-height:330px}.trend-head{gap:9px}.trend-total{min-width:102px}.trend-total b{font-size:1.15rem}.trend-total small{font-size:.65rem}.trend-head strong{font-size:2.7rem}.performance-metrics{grid-template-columns:1fr}.metric-card{min-height:78px}.seller-row{grid-template-columns:28px minmax(0,1fr) 70px;gap:8px}.seller-name-row small{display:none}.seller-amount{font-size:.75rem}.setup-grid{grid-template-columns:1fr}.setup-tile{min-height:220px}.menu-tile-main{height:158px}.menu-tile-copy{padding:10px}.menu-tile-footer{flex-wrap:wrap}.menu-tile-footer>span{flex-basis:100%}}
+
+/* History follows the iPad receipt gallery. */
+.history-heading{align-items:center}
+.history-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.card-search{display:flex;align-items:center;gap:9px;min-width:208px;height:40px;padding:0 12px;border:1px solid #333;border-radius:11px;background:#191919;color:#999}
+.card-search:focus-within{border-color:#a447f5}
+.card-search input{width:100%;border:0;outline:0;background:transparent;color:#fff;font-size:.82rem}
+.card-search input::placeholder{color:#858585}
+.history-receipts{padding:22px 24px;margin-top:18px;background:#111}
+.receipt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:15px;margin-top:18px}
+.history-more{display:block;margin:18px auto 0}
+.receipt-card{min-width:0;display:flex;flex-direction:column;border-radius:13px;overflow:hidden;background:#f4f1ea;color:#121212}
+.receipt-paper{color:#111;background:#f4f1ea;padding:18px;font-size:.78rem;line-height:1.45}
+.receipt-paper.compact{flex:1;min-height:335px;display:flex;flex-direction:column}
+.receipt-header,.receipt-meta,.receipt-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.receipt-header>div{display:grid;gap:2px;min-width:0}
+.receipt-header strong{font-size:.86rem;letter-spacing:.13em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.receipt-header small{font-size:.66rem;color:#666;font-weight:750;letter-spacing:.04em}
+.paid-badge{align-self:start;background:#d7ecdf;color:#116a42;font-size:.62rem;letter-spacing:.12em;padding:5px 7px;border-radius:999px}
+.paid-badge.refunded{background:#f2d8d9;color:#9a303d}
+.receipt-meta{color:#696969;font-size:.69rem;margin-top:11px}
+.receipt-rule{border-top:1px dashed #b7b5af;margin:12px 0}
+.receipt-items{display:grid;gap:6px;min-height:42px}
+.receipt-line>span{min-width:0;overflow-wrap:anywhere}
+.receipt-line strong{white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums}
+.receipt-more{color:#777;font-size:.69rem}
+.receipt-totals{display:grid;gap:6px;margin-top:auto;padding-top:14px}
+.receipt-line.prominent{padding-top:7px;font-size:.88rem;font-weight:900}
+.receipt-line.prominent strong{font-size:1.3rem;font-weight:900}
+.receipt-details{display:grid;gap:2px;color:#6c6c6c;font-size:.69rem}
+.receipt-details strong{color:#242424}
+.receipt-signature{display:grid;gap:4px;margin-top:12px;border-top:1px dashed #b7b5af;padding-top:10px}
+.receipt-signature small{font-size:.58rem;font-weight:900;letter-spacing:.11em}
+.receipt-signature svg{width:100%;height:56px;border-bottom:1px solid #777}
+.receipt-signature p{font-size:.59rem;color:#777;margin:3px 0 0;line-height:1.35}
+.receipt-view{width:calc(100% - 28px);margin:0 14px 14px;border:0;border-radius:8px;padding:10px;background:#111;color:#fff;font-size:.75rem;font-weight:800}
+.receipt-dialog{width:min(480px,calc(100% - 24px));max-height:90vh;overflow:auto;background:#151515;color:#fff;border:1px solid #555;border-radius:18px;padding:20px;box-shadow:0 20px 80px #000}
+.receipt-dialog::backdrop{background:#000c}
+.receipt-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.receipt-dialog-head h2{margin:0;font-size:1.25rem}
+.receipt-dialog-head button{border:0;background:transparent;color:#fff;font-size:1.7rem}
+.receipt-dialog .receipt-paper{border-radius:10px}
+
+/* Floor shares the POS fixture geometry and live occupied-check data. */
+.floor-actions{display:flex;align-items:end;gap:10px}
+.add-floor-label{display:grid;gap:5px;color:#999;font-size:.73rem}
+.add-floor-label select{min-height:43px;min-width:132px;background:#1b1b1b;color:#fff;border:1px solid #555;border-radius:11px;padding:9px 11px}
+.floor-summary{display:flex;gap:10px;margin:-6px 0 13px;color:#aaa;font-size:.75rem}
+.floor-summary span{background:#161616;border:1px solid #333;padding:6px 10px;border-radius:999px}
+.floor-canvas{height:clamp(420px,57vw,720px);position:relative;overflow:hidden;border:1px solid #343434;border-radius:24px;background-color:#1b1b1b;background-image:linear-gradient(#ffffff0b 1px,transparent 1px),linear-gradient(90deg,#ffffff0b 1px,transparent 1px);background-size:36px 36px}
+.floor-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;color:#aaa}
+.floor-empty>span{font-size:2.6rem;color:#a447f5}.floor-empty strong{color:#fff;font-size:1.3rem}.floor-empty p{margin:0}
+.floor-item{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transform:translate(-50%,-50%) rotate(var(--floor-rotation));border:1px solid #737373;border-radius:16px;background:#333;color:#fff;overflow:hidden;padding:5px;box-shadow:0 8px 20px #0005;touch-action:none;cursor:pointer}
+.floor-item.table{border-radius:999px;background:#333057}.floor-item.booth{background:#3c2a3e}.floor-item.bar{background:#292c43}.floor-item.stage{background:#39312d}.floor-item.wall{background:#4c4c4c;border-radius:5px}
+.floor-item.occupied{border-color:#c46bff;background:#48276b}.floor-item.selected{outline:3px solid #fff;outline-offset:3px}
+.floor-item strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.65rem,1.1vw,.9rem)}
+.floor-kind-icon{font-size:clamp(.75rem,1.5vw,1.3rem);line-height:1}.floor-item.wall .floor-kind-icon{display:none}
+.floor-check-badge{font-size:.63rem;color:#f1d6ff;white-space:nowrap}
+.floor-inspector{margin-top:14px;padding:16px 18px}.floor-inspector-head{display:flex;align-items:center;justify-content:space-between}.floor-inspector p{color:#aaa;margin:8px 0}.floor-inspector small{color:#999}
+.floor-inspector-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:13px}.floor-inspector-controls input{background:#101010;border:1px solid #555;border-radius:9px;color:#fff;min-height:41px;padding:9px 11px}.floor-inspector-controls button{padding:9px 12px}
+.destructive{color:#ff9ea9;border-color:#8a4149}.floor-warning{display:block;margin-top:9px;color:#e4ad6c!important}
+
+/* Owner-managed staff and audited timesheet corrections. */
+.clock-grid{display:grid;grid-template-columns:minmax(270px,.8fr) minmax(0,1.2fr);gap:16px;align-items:start}
+.clock-panel{padding:22px 24px;min-height:280px}.clock-panel .card-heading{align-items:center}
+.clock-staff,.clock-shifts{display:grid;gap:8px;margin-top:17px}
+.clock-hint{color:#aaa;font-size:.77rem;line-height:1.45}
+.clock-staff-row,.clock-shift-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;background:#1d1d1d;border:1px solid #303030;border-radius:12px}
+.clock-staff-row>div,.clock-shift-row>div{display:grid;gap:3px;min-width:0}.clock-staff-row strong,.clock-shift-row strong{font-size:.86rem}.clock-staff-row small,.clock-shift-row small{color:#999;font-size:.72rem}.clock-staff-row button,.clock-shift-row button{padding:8px 12px;font-size:.75rem}
+.clock-unlock{margin-top:18px}.clock-unlock p{color:#aaa;font-size:.82rem;line-height:1.5}.clock-unlock form{display:grid;gap:12px;max-width:370px}.clock-unlock label,.clock-report-controls label{display:grid;gap:7px;color:#bbb;font-size:.76rem}.clock-unlock input,.clock-report-controls select{background:#101010;border:1px solid #555;border-radius:10px;color:#fff;padding:10px 11px}.clock-unlock button{justify-self:start}
+.clock-report-controls{display:flex;align-items:end;justify-content:space-between;gap:10px;margin-top:18px}.clock-report-controls select{min-width:130px}.clock-report-controls button{padding:10px 13px}
+.clock-shift-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(140px,1.2fr) 58px auto;font-size:.75rem}.clock-shift-row>div:nth-child(2){color:#ddd}.clock-shift-row b{text-align:right;white-space:nowrap}
+.permission-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;border:1px solid #444;border-radius:11px;padding:12px}.permission-grid legend{color:#bbb;font-size:.8rem;padding:0 5px}.permission-grid .checkbox-field{font-size:.78rem}
+.clock-shift-person{color:#fff;margin:0;font-weight:700}.clock-audit-note{color:#aaa;font-size:.7rem}
+
+@media(max-width:1100px){.clock-grid{grid-template-columns:1fr}.clock-shift-row{grid-template-columns:minmax(100px,1fr) minmax(140px,1.4fr) 58px auto}#history>.page-heading,#floor>.page-heading,#clock>.page-heading{align-items:flex-start;flex-direction:column}.history-controls{justify-content:flex-start;width:100%}}
+@media(max-width:800px){.history-controls{justify-content:flex-start}.floor-canvas{height:520px}.floor-item strong{font-size:.7rem}}
+@media(max-width:540px){.history-receipts,.clock-panel{padding:16px}.history-controls{width:100%}.card-search{width:100%}.receipt-grid{grid-template-columns:1fr}.floor-actions{width:100%}.floor-canvas{height:450px}.floor-kind-icon{font-size:.8rem}.floor-item strong{font-size:.58rem}.floor-item .floor-check-badge{font-size:.53rem}.clock-shift-row{grid-template-columns:1fr auto}.clock-shift-row>div:nth-child(2){grid-column:1}.clock-shift-row>b{grid-column:2;grid-row:2}.clock-shift-row>button{grid-column:2;grid-row:1}.permission-grid{grid-template-columns:1fr 1fr}}
+@media print{body *{visibility:hidden!important}#receiptDetail,#receiptDetail *{visibility:visible!important}#receiptDetail{position:absolute;left:0;top:0;width:100%}#receiptDetail .receipt-paper{background:#fff!important;color:#000!important;print-color-adjust:exact}}

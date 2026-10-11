@@ -2,6 +2,9 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { auth, db } from '../firebase.js';
 import { calculateMetrics } from './metrics.mjs';
+import { createHistory } from './history.mjs';
+import { createFloor } from './floor.mjs';
+import { createTimeClock } from './timeclock.mjs';
 
 const $ = id => document.getElementById(id);
 const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100);
@@ -26,6 +29,9 @@ function bundledDrinkImage(drink) {
   return drink.category === 'hookah' ? './drink-images/hookah.png' : null;
 }
 const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: '7', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
+const history = createHistory({ db, getUid: () => state.uid, getVenue: () => state.venue, getOrders: () => state.orders });
+const floor = createFloor({ db, getUid: () => state.uid });
+const clock = createTimeClock({ auth, db, getUid: () => state.uid });
 let toastTimer;
 
 function node(tag, className, text) {
@@ -52,6 +58,7 @@ function clearListeners() {
   state.unsubscribers.splice(0).forEach(unsubscribe => unsubscribe());
   state.specialUnsubscribe?.();
   state.specialUnsubscribe = null;
+  floor.stop(); clock.stop(); history.reset();
 }
 
 function venueRef() { return doc(db, 'venues', state.uid); }
@@ -66,6 +73,11 @@ function listen(reference, onData, context) {
 
 async function start(user) {
   clearListeners();
+  state.uid = null;
+  state.venue = null;
+  state.drinks = []; state.nights = []; state.specials = []; state.orders = [];
+  state.ordersLoaded = false; state.ordersError = false;
+  $('appShell').hidden = true; $('authGate').hidden = false;
   $('authGate').textContent = 'Checking your AVNT account…';
   try {
     const [venue, business] = await Promise.all([
@@ -83,11 +95,12 @@ async function start(user) {
     $('authGate').hidden = true;
     $('appShell').hidden = false;
     renderVenue();
+    floor.start(user.uid); clock.start(user.uid);
 
     state.unsubscribers.push(listen(venueRef(), snapshot => {
       if (!snapshot.exists()) { $('appShell').hidden = true; $('authGate').hidden = false; $('authGate').textContent = 'Venue account no longer available.'; return; }
       state.venue = snapshot.data();
-      renderVenue(); renderNights(); renderAnalytics();
+      renderVenue(); renderNights(); renderAnalytics(); history.render();
     }, 'venue'));
     state.unsubscribers.push(listen(drinksRef(), snapshot => {
       state.drinks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -103,7 +116,7 @@ async function start(user) {
       query(collection(db, 'venues', state.uid, 'orders'), orderBy('createdAt', 'desc'), limit(1000)),
       snapshot => {
         state.orders = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-        state.ordersLoaded = true; state.ordersError = false; renderAnalytics();
+        state.ordersLoaded = true; state.ordersError = false; renderAnalytics(); history.render();
       },
       error => { state.ordersError = true; fail(error, 'Could not load sales'); renderAnalytics(); }
     ));
@@ -138,6 +151,8 @@ function setPage(page) {
   });
   document.querySelector('.sidebar').classList.remove('open');
   $('mobileNav').setAttribute('aria-expanded', 'false');
+  if (page === 'history') history.render();
+  if (page === 'clock') clock.refreshStatus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -541,6 +556,7 @@ $('menuCategory').addEventListener('change', renderMenu);
 $('addDrink').addEventListener('click', () => openEditor('drink'));
 $('addNight').addEventListener('click', () => openEditor('night'));
 $('openNightsSetup').addEventListener('click', () => setPage('nights'));
+$('openClockSetup').addEventListener('click', () => setPage('clock'));
 $('editNight').addEventListener('click', () => openEditor('night', state.nights.find(night => night.id === state.selectedNightId)));
 $('addSpecial').addEventListener('click', () => openEditor('special'));
 $('activateNight').addEventListener('click', async () => {
