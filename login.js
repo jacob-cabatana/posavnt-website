@@ -10,7 +10,7 @@ const message = document.getElementById('loginMessage');
 
 function showMessage(text, isError = true) {
   message.textContent = text;
-  message.style.color = isError ? '#ffb4b4' : '#bff3d0';
+  message.style.color = isError ? '#a42437' : '#216546';
   message.hidden = false;
 }
 
@@ -54,7 +54,7 @@ form.addEventListener('submit', async event => {
       : 'Could not sign in. Check your email and password.');
   } finally {
     submit.disabled = false;
-    submit.textContent = 'Continue to dashboard →';
+    submit.textContent = 'Log in →';
   }
 });
 
