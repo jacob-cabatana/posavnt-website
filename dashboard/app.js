@@ -1,6 +1,8 @@
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { auth, db } from '../firebase.js';
+import { getDownloadURL, ref as storageRef } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
+import { auth, db, storage } from '../firebase.js';
+import { sharedCoffeeImagePath } from './coffee-images.mjs';
 import { calculateMetrics } from './metrics.mjs';
 import { createHistory } from './history.mjs';
 import { createFloor } from './floor.mjs';
@@ -29,11 +31,38 @@ function bundledDrinkImage(drink) {
   }
   return drink.category === 'hookah' ? './drink-images/hookah.png' : null;
 }
+const sharedImageURLs = new Map();
+function attachDrinkImage(container, drink) {
+  const fallback = bundledDrinkImage(drink);
+  const uploaded = typeof drink.imageUrl === 'string' && /^https:\/\//i.test(drink.imageUrl) ? drink.imageUrl : null;
+  const sharedPath = uploaded ? null : sharedCoffeeImagePath(drink);
+  if (!uploaded && !sharedPath && !fallback) return;
+
+  const image = node('img'); image.alt = ''; image.loading = 'lazy';
+  image.addEventListener('error', () => {
+    if (fallback && image.src !== new URL(fallback, location.href).href) image.src = fallback;
+    else image.remove();
+  });
+  if (uploaded || fallback) {
+    image.src = uploaded || fallback;
+    container.append(image);
+  }
+  if (sharedPath) {
+    if (!sharedImageURLs.has(sharedPath)) {
+      sharedImageURLs.set(sharedPath, getDownloadURL(storageRef(storage, sharedPath)).catch(() => null));
+    }
+    sharedImageURLs.get(sharedPath).then(url => {
+      if (!url || !container.isConnected) return;
+      image.src = url;
+      if (!image.isConnected) container.append(image);
+    });
+  }
+}
 const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: '7', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
 const history = createHistory({ db, getUid: () => state.uid, getVenue: () => state.venue, getOrders: () => state.orders });
 const floor = createFloor({ db, getUid: () => state.uid });
 const clock = createTimeClock({ auth, db, getUid: () => state.uid });
-const inventory = createInventory({ auth, db, getUid: () => state.uid, getDrinks: () => state.drinks, getImage: bundledDrinkImage });
+const inventory = createInventory({ auth, db, getUid: () => state.uid, getDrinks: () => state.drinks, attachImage: attachDrinkImage });
 let toastTimer;
 
 function node(tag, className, text) {
@@ -337,16 +366,7 @@ function renderMenu() {
     main.setAttribute('aria-label', `Edit ${drink.name || 'menu item'}, ${pricing}`);
     const visual = node('span', 'menu-photo');
     visual.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 9h38L44 35H20L13 9Zm19 26v16m-12 4h24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
-    const fallbackImage = bundledDrinkImage(drink);
-    const remoteImage = typeof drink.imageUrl === 'string' && /^https:\/\//i.test(drink.imageUrl) ? drink.imageUrl : null;
-    if (remoteImage || fallbackImage) {
-      const image = node('img'); image.src = remoteImage || fallbackImage; image.alt = ''; image.loading = 'lazy';
-      image.addEventListener('error', () => {
-        if (fallbackImage && image.src !== new URL(fallbackImage, location.href).href) image.src = fallbackImage;
-        else image.remove();
-      });
-      visual.append(image);
-    }
+    attachDrinkImage(visual, drink);
     const copy = node('span', 'menu-tile-copy');
     copy.append(node('strong', '', drink.name || 'Untitled item'), node('span', '', pricing));
     main.append(visual, node('span', 'menu-shade'), copy);

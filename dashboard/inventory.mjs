@@ -17,7 +17,7 @@ export function stockInfo(item) {
     label: !enabled ? 'Not tracked' : soldOut ? 'Sold out' : available === 0 ? 'In checkout' : low ? `Low stock · ${available} left` : `${available} available` };
 }
 
-export function createInventory({auth, db, getUid, getDrinks, getImage}) {
+export function createInventory({auth, db, getUid, getDrinks, attachImage}) {
   const saveInventory = httpsCallable(getFunctions(auth.app, 'us-central1'), 'savePOSInventory');
   let unsubscribe, selected, operationId, lastPayload, busy = false;
   const notice = text => { $('inventoryNotice').textContent = text || ''; $('inventoryNotice').hidden = !text; };
@@ -42,13 +42,7 @@ export function createInventory({auth, db, getUid, getDrinks, getImage}) {
     shown.forEach(item => {
       const stock = stockInfo(item), row = make('article', 'inventory-row');
       const artwork = make('div', 'inventory-art', '▣');
-      const remote = typeof item.imageUrl === 'string' && /^https:\/\//i.test(item.imageUrl) ? item.imageUrl : null;
-      const fallback = getImage(item);
-      if (remote || fallback) {
-        const image = make('img'); image.src = remote || fallback; image.alt = ''; image.loading = 'lazy';
-        image.addEventListener('error', () => { if (fallback && image.src !== new URL(fallback, location.href).href) image.src = fallback; else image.remove(); });
-        artwork.append(image);
-      }
+      attachImage(artwork, item);
       const info = make('div', 'inventory-name'); info.append(make('strong', '', item.name || 'Item'), make('small', '', String(item.category || 'Menu').replaceAll('_',' ')));
       const count = make('div', 'inventory-count'); count.append(make('b', '', stock.enabled ? stock.quantity : '—'), make('span', '', stock.enabled ? 'on hand' : 'not tracked'));
       const state = make('div', `inventory-state${stock.soldOut ? ' sold-out' : stock.low ? ' low-stock' : ''}`);
