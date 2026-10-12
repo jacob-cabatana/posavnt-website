@@ -25,3 +25,9 @@ python3 -m http.server 4173
 ```
 
 Run analytics checks with `node --test dashboard/metrics.test.mjs`.
+
+Starter coffee menu artwork is stored in the AVNT Firebase Storage bucket under
+`defaultDrinks/{iced-coffee,cold-brew,iced-americano,iced-latte,iced-mocha}.png`.
+The dashboard resolves these shared images for matching menu items, while a
+venue's uploaded `imageUrl` takes precedence. The iPad app retains bundled
+copies so these items remain visible without a network connection.
