@@ -31,3 +31,14 @@ test('venue-paid fees are not added to customer collections', () => {
 });
 
 test('canceled attempts are not sales', () => assert.equal(isReportableSale(orders.at(-1)), false));
+
+test('one-year metrics include older sales but exclude sales beyond 365 calendar days', () => {
+  const sale = date => ({ createdAt: date, paidAt: date, paymentStatus: 'paid',
+    items: [{ name: 'Coffee', quantity: 1, lineTotalCents: 500 }], customerTotalCents: 500 });
+  const result = calculateMetrics([
+    sale('2025-10-13T12:00:00Z'), sale('2026-04-01T12:00:00Z'),
+    sale('2025-10-12T12:00:00Z'),
+  ], '365', { now: new Date('2026-10-12T18:00:00Z') });
+  assert.equal(result.orders, 2);
+  assert.equal(result.salesCents, 1000);
+});

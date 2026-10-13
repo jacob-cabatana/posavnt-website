@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { sharedCoffeeImagePath } from './coffee-images.mjs';
 
 test('starter coffee items use AVNT shared Storage images', () => {
-  for (const name of ['Iced Coffee', 'Cold Brew', 'Iced Americano', 'Iced Latte', 'Iced Mocha']) {
+  for (const name of ['Iced Coffee', 'Cold Brew', 'Iced Americano', 'Iced Latte', 'Iced Mocha', 'Hot Coffee', 'Americano', 'Espresso', 'Latte', 'Cappuccino', 'Mocha']) {
     const slug = name.toLowerCase().replaceAll(' ', '-');
     assert.equal(sharedCoffeeImagePath({ name }), `defaultDrinks/${slug}.png`);
   }
@@ -12,5 +12,6 @@ test('starter coffee items use AVNT shared Storage images', () => {
 test('venue image overrides and unrelated products are left alone', () => {
   assert.equal(sharedCoffeeImagePath({ name: 'Iced Latte', imageUrl: 'https://example.com/custom.png' }), null);
   assert.equal(sharedCoffeeImagePath({ name: 'Iced Latte', imagePath: 'venues/venue/drinks/latte.png' }), null);
+  assert.equal(sharedCoffeeImagePath({ name: 'House Iced Latte', imagePath: 'defaultDrinks/iced-latte.png' }), 'defaultDrinks/iced-latte.png');
   assert.equal(sharedCoffeeImagePath({ name: 'Vanilla Latte' }), null);
 });

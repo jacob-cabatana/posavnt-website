@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Securely set up Stripe payments and payouts for your AVNT venue." />
+    <title>Set up payouts — AVNT</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Cpath d='M7 24 14.1 8h3.8L25 24h-4.5l-1.2-3H12.7l-1.2 3H7Zm7-6.8h4l-2-5.1-2 5.1Z' fill='%23a855f7'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./assets/avnt-wordmark.css" />
+    <style>
+      :root { color-scheme: dark; --violet: #753ce7; --ink: #16131d; --muted: #77737f; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100svh; background: #000; color: #fff; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; text-decoration: none; }
+      .page-header { height: 112px; width: min(1120px, calc(100% - 64px)); margin: auto; display: grid; place-items: center; }
+      .brand { font-size: 1.65rem; letter-spacing: .18em; font-weight: 850; line-height: 1; }
+      main { width: min(1040px, calc(100% - 64px)); margin: 22px auto 72px; }
+      .layout { display: grid; grid-template-columns: 1.12fr 1fr; min-height: 670px; overflow: hidden; border-radius: 28px; border: 1px solid #26222c; box-shadow: 0 24px 100px #12092155; }
+      .art-panel { position: relative; min-width: 0; background: #08060d; overflow: hidden; }
+      .art-panel img { display: block; width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; object-position: center 45%; }
+      .art-panel::after { content: ""; position: absolute; inset: 55% 0 0; background: linear-gradient(transparent, #050307df); pointer-events: none; }
+      .art-caption { position: absolute; z-index: 1; left: 38px; right: 30px; bottom: 32px; margin: 0; font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 650; line-height: 1.15; letter-spacing: -.045em; }
+      .art-caption span { color: #c5bfce; }
+      .panel { color-scheme: light; background: #fff; color: var(--ink); padding: 48px 54px; display: flex; flex-direction: column; justify-content: center; }
+      .step { color: var(--violet); font-size: .67rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; margin: 0 0 10px; }
+      h1 { font-size: 2.15rem; font-weight: 700; line-height: 1.08; letter-spacing: -.05em; margin: 0 0 14px; }
+      .intro { margin: 0 0 22px; font-size: .87rem; line-height: 1.65; color: var(--muted); }
+      .status { border: 1px solid #e9e5ec; border-radius: 15px; padding: 16px 18px; margin: 0 0 20px; background: #faf9fb; }
+      .status strong { display: block; font-size: .87rem; margin-bottom: 4px; }
+      .status p { margin: 0; color: #6e6875; font-size: .77rem; line-height: 1.5; }
+      .mode { display: inline-block; margin: 0 0 14px; border-radius: 99px; background: #f4ebff; color: #7033c8; padding: 7px 11px; font-size: .72rem; font-weight: 700; }
+      .button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 49px; border: 0; border-radius: 999px; padding: 14px 20px; color: #fff; background: var(--violet); font: inherit; font-weight: 650; font-size: .84rem; cursor: pointer; }
+      .button:hover { background: #6430cc; }
+      .button:disabled { opacity: .65; cursor: wait; }
+      .secondary { display: block; border: 0; padding: 13px 8px; margin: 8px auto 0; background: transparent; color: #6b6177; font: inherit; font-size: .8rem; cursor: pointer; }
+      .secondary:hover { color: var(--violet); }
+      .manual-link { display: block; color: var(--violet); text-align: center; font-size: .8rem; font-weight: 650; margin: 12px 0 0; }
+      .help { margin: 18px 0 0; color: #77737f; font-size: .72rem; line-height: 1.55; text-align: center; }
+      .help a { color: var(--violet); font-weight: 650; }
+      .reauth { border-top: 1px solid #eee9f0; margin: 4px 0 18px; padding-top: 16px; }
+      .reauth label { display: block; font-size: .75rem; font-weight: 650; margin-bottom: 6px; }
+      .reauth input { width: 100%; border: 1px solid #d7d3de; border-radius: 10px; background: #fff; padding: 12px; font: inherit; font-size: .86rem; }
+      .reauth input:focus { outline: 2px solid #ad8aef; }
+      .error { color: #a42437; font-size: .77rem; line-height: 1.5; margin: 0 0 14px; }
+      .footer { margin: 26px 0 0; text-align: center; font-size: .65rem; letter-spacing: .2em; font-weight: 750; color: #aaa3b3; }
+      a:focus-visible, button:focus-visible { outline: 3px solid #ad8aef; outline-offset: 4px; }
+      [hidden] { display: none !important; }
+      @media (max-width: 1000px) { .panel { padding: 40px 36px; } }
+      @media (max-width: 780px) { .page-header { height: 88px; } .brand { font-size: 1.35rem; } main { width: min(480px, calc(100% - 40px)); margin: 10px auto 40px; } .layout { grid-template-columns: 1fr; min-height: 0; border-radius: 24px; } .art-panel { height: 190px; } .art-panel img { object-position: center top; } .art-panel::after { inset: 25% 0 0; } .art-caption { left: 28px; bottom: 18px; font-size: 1.45rem; } .panel { padding: 30px 32px; } h1 { font-size: 1.8rem; } }
+    </style>
+  </head>
+  <body>
+    <header class="page-header"><a class="brand avnt-wordmark" href="./index.html" aria-label="AVNT home"></a></header>
+    <main>
+      <div class="layout">
+        <section class="art-panel" aria-label="AVNT venue">
+          <img src="./assets/avnt-login-chrome-coupe.png" alt="Sculptural chrome cocktail glass reflecting violet light" width="1120" height="1400" />
+          <p class="art-caption">Your venue.<br /><span>Ready to get paid.</span></p>
+        </section>
+        <section class="panel" aria-labelledby="page-title">
+          <span class="avnt-wordmark avnt-wordmark--dark avnt-wordmark--feature" role="img" aria-label="AVNT — Fast, Simple, Reliable. Established 2026. Built for Nightlife."></span>
+          <p class="step">Next step</p>
+          <h1 id="page-title">Set up payments &amp; payouts</h1>
+          <p class="intro">Continue with Stripe to add your bank account and complete any business verification it requires. Your banking details are entered on Stripe, not AVNT.</p>
+          <span class="mode" id="modeBadge" hidden>Stripe test mode</span>
+          <div class="status" role="status" aria-live="polite"><strong id="statusTitle">Checking your Stripe setup…</strong><p id="statusDetail">This usually takes a moment.</p></div>
+          <p class="error" id="errorMessage" role="alert" hidden></p>
+          <div class="reauth" id="reauthArea" hidden><label for="ownerPassword">Confirm your owner password to continue</label><input id="ownerPassword" type="password" autocomplete="current-password" /></div>
+          <button class="button" id="startStripe" type="button" disabled>Continue to Stripe →</button>
+          <a class="manual-link" id="manualStripeLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Open your Stripe setup →</a>
+          <button class="secondary" id="checkStatus" type="button" hidden>Check Stripe status</button>
+          <a class="button" id="dashboardLink" href="./dashboard/" hidden>Go to dashboard →</a>
+          <p class="help">Stripe may ask for more than a bank account. After finishing there, return to this tab and check your status. <a href="mailto:hello@posavnt.com">Need help?</a></p>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./setup-payouts.js"></script>
+  </body>
+</html>

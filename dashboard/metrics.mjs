@@ -79,7 +79,7 @@ export function calculateMetrics(orders, period, options = {}) {
   const timeZone = options.timeZone || 'America/New_York';
   const today = dateKey(now, timeZone);
   const currentNight = businessNightKey(now, timeZone);
-  const firstDay = period === '30' ? shiftDateKey(today, -29) : shiftDateKey(today, -6);
+  const firstDay = shiftDateKey(today, period === '365' ? -364 : period === '30' ? -29 : -6);
   const included = orders.filter(isReportableSale).map(normalizedOrder).filter(order => {
     if (!order.saleDate) return false;
     if (period === 'tonight') return businessNightKey(order.saleDate, timeZone) === currentNight;

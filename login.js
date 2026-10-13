@@ -7,6 +7,9 @@ const email = document.getElementById('loginEmail');
 const password = document.getElementById('loginPassword');
 const submit = document.getElementById('loginSubmit');
 const message = document.getElementById('loginMessage');
+const destination = new URLSearchParams(location.search).get('next') === 'payouts'
+  ? './setup-payouts.html'
+  : './dashboard/';
 
 function showMessage(text, isError = true) {
   message.textContent = text;
@@ -25,7 +28,7 @@ async function isVenueOwner(user) {
 onAuthStateChanged(auth, async user => {
   if (!user) return;
   try {
-    if (await isVenueOwner(user)) location.replace('./dashboard/');
+    if (await isVenueOwner(user)) location.replace(destination);
     else {
       await signOut(auth);
       showMessage('This account does not have an AVNT venue dashboard.');
@@ -47,7 +50,7 @@ form.addEventListener('submit', async event => {
       showMessage('This account does not have an AVNT venue dashboard.');
       return;
     }
-    location.replace('./dashboard/');
+    location.replace(destination);
   } catch (error) {
     showMessage(error.code === 'auth/too-many-requests'
       ? 'Too many attempts. Please wait and try again.'

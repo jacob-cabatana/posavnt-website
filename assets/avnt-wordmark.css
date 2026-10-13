@@ -1,0 +1,70 @@
+.avnt-wordmark {
+  display: block;
+  width: var(--avnt-logo-width, 170px);
+  height: auto;
+  aspect-ratio: 764 / 389;
+  flex: none;
+  background: url("./avnt-wordmark-source.png") center / contain no-repeat;
+}
+
+.avnt-wordmark--dark {
+  filter: invert(1);
+}
+
+.avnt-wordmark--small {
+  --avnt-logo-width: 180px;
+}
+
+.avnt-wordmark--feature {
+  --avnt-logo-width: min(340px, 100%);
+  margin-bottom: 20px;
+}
+
+.sidebar .avnt-wordmark {
+  --avnt-logo-width: 180px;
+}
+
+.site-footer .avnt-wordmark {
+  --avnt-logo-width: 280px;
+}
+
+.site-header.scrolled .avnt-wordmark {
+  --avnt-logo-width: 160px;
+}
+
+.site-header {
+  height: 104px;
+}
+
+.site-header.scrolled {
+  height: 86px;
+}
+
+.legal-header,
+.page-header:has(.avnt-wordmark) {
+  min-height: 104px;
+}
+
+.panel-footer .avnt-wordmark,
+.footer .avnt-wordmark {
+  margin-inline: auto;
+}
+
+@media (max-width: 760px) {
+  .site-header,
+  .site-header.scrolled {
+    height: 96px;
+  }
+
+  .site-header .avnt-wordmark {
+    --avnt-logo-width: 150px;
+  }
+
+  .page-header .avnt-wordmark {
+    --avnt-logo-width: 150px;
+  }
+
+  .page-header .back-link span {
+    display: none;
+  }
+}

@@ -7,24 +7,20 @@
     <meta name="description" content="Sign in to the POS AVNT client dashboard." />
     <title>Client Login — POS AVNT</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Cpath d='M7 24 14.1 8h3.8L25 24h-4.5l-1.2-3H12.7l-1.2 3H7Zm7-6.8h4l-2-5.1-2 5.1Z' fill='%23a855f7'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./assets/avnt-wordmark.css" />
     <style>
       :root { color-scheme: dark; --violet: #753ce7; --ink: #16131d; --muted: #77737f; }
       * { box-sizing: border-box; }
       body { margin: 0; min-height: 100svh; background: #000; color: #fff; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
       a { color: inherit; text-decoration: none; }
-      .page-header { height: 112px; width: min(1120px, calc(100% - 64px)); margin: auto; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+      .page-header { height: 88px; width: min(1120px, calc(100% - 64px)); margin: auto; display: flex; align-items: center; }
       .back-link { justify-self: start; color: #8f8b96; font-size: .75rem; display: inline-flex; align-items: center; gap: 8px; }
       .back-link:hover { color: #fff; }
-      .brand { font-size: 1.65rem; letter-spacing: .18em; font-weight: 850; line-height: 1; }
       main { width: min(1040px, calc(100% - 64px)); margin: 22px auto 72px; }
       .login-layout { display: grid; grid-template-columns: 1.12fr 1fr; min-height: 620px; overflow: hidden; border-radius: 28px; border: 1px solid #26222c; box-shadow: 0 24px 100px #12092155; }
-      .art-panel { position: relative; min-width: 0; background: #08060d; overflow: hidden; }
-      .art-panel img { display: block; width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; object-position: center 45%; }
-      .art-panel::after { content: ""; position: absolute; inset: 62% 0 0; background: linear-gradient(transparent, #050307cf); pointer-events: none; }
-      .art-caption { position: absolute; z-index: 1; left: 38px; right: 30px; bottom: 32px; margin: 0; color: #fff; font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 650; line-height: 1.15; letter-spacing: -.045em; }
-      .art-caption span { color: #c5bfce; }
+      .art-panel { display: grid; place-items: center; min-width: 0; padding: 48px; background: #000; }
+      .art-wordmark { --avnt-logo-width: min(390px, 100%); }
       .login-panel { color-scheme: light; background: #fff; color: var(--ink); padding: 58px 54px 44px; display: flex; flex-direction: column; justify-content: center; }
-      .login-mark { width: 45px; height: 45px; color: var(--violet); margin-bottom: 32px; }
       h1 { font-size: 2.05rem; font-weight: 700; line-height: 1.1; letter-spacing: -.05em; margin: 0 0 10px; }
       .intro { margin: 0 0 33px; font-size: .85rem; line-height: 1.6; color: var(--muted); }
       label { display: block; margin-top: 22px; }
@@ -42,27 +38,25 @@
       .login-button:disabled { opacity: .65; cursor: wait; }
       a:focus-visible, button:focus-visible { outline: 3px solid #ad8aef; outline-offset: 5px; }
       #loginMessage { font-size: .8rem; line-height: 1.5; margin: 0 0 18px; }
-      .panel-footer { margin: 32px 0 0; text-align: center; font-size: .65rem; letter-spacing: .2em; font-weight: 750; color: #aaa3b3; }
+      .account-link { margin: 20px 0 0; text-align: center; color: #77737f; font-size: .78rem; }
+      .account-link a { color: var(--violet); font-weight: 650; }
+      .account-link a:hover { text-decoration: underline; }
       @media (min-height: 880px) and (min-width: 781px) { main { margin-top: clamp(22px, 6vh, 80px); } }
       @media (max-width: 1000px) { .login-panel { padding: 42px 36px; } .login-layout { min-height: 580px; } }
-      @media (max-width: 780px) { .page-header { height: 88px; width: calc(100% - 40px); } .brand { font-size: 1.35rem; } .back-link { font-size: .7rem; } main { width: min(480px, calc(100% - 40px)); margin: 10px auto 40px; } .login-layout { grid-template-columns: 1fr; min-height: 0; border-radius: 24px; } .art-panel { height: 230px; } .art-panel img { object-position: center 28%; } .art-panel::after { inset: 30% 0 0; } .art-caption { left: 28px; bottom: 22px; font-size: 1.5rem; } .login-panel { padding: 32px 32px 28px; } .login-mark { width: 32px; height: 32px; margin-bottom: 20px; } h1 { font-size: 1.8rem; } .intro { margin-bottom: 22px; } .panel-footer { margin-top: 25px; } }
-      @media (max-width: 780px) { .art-panel img { object-position: center top; } }
+      @media (max-width: 780px) { .page-header { height: 72px; width: calc(100% - 40px); } .back-link { font-size: .7rem; } main { width: min(480px, calc(100% - 40px)); margin: 10px auto 40px; } .login-layout { grid-template-columns: 1fr; min-height: 0; border-radius: 24px; } .art-panel { height: 230px; padding: 28px; } .art-wordmark { --avnt-logo-width: 240px; } .login-panel { padding: 32px 32px 28px; } h1 { font-size: 1.8rem; } .intro { margin-bottom: 22px; } }
       @media (max-width: 380px) { .page-header { width: calc(100% - 28px); } main { width: calc(100% - 28px); } .login-panel { padding-inline: 25px; } .back-link span { display: none; } }
     </style>
   </head>
   <body>
     <header class="page-header">
       <a class="back-link" href="index.html" aria-label="Back to AVNT home">← <span>Back to home</span></a>
-      <a class="brand" href="index.html" aria-label="AVNT home">AVNT</a>
     </header>
     <main>
       <div class="login-layout">
-        <section class="art-panel" aria-label="AVNT nightlife">
-          <img src="./assets/avnt-login-chrome-coupe.png" alt="Sculptural chrome cocktail glass reflecting violet light" width="1120" height="1400" fetchpriority="high" />
-          <p class="art-caption">Run the night.<br /><span>From anywhere.</span></p>
+        <section class="art-panel" aria-label="AVNT">
+          <span class="avnt-wordmark art-wordmark" role="img" aria-label="AVNT — Fast, Simple, Reliable. Established 2026. Built for Nightlife."></span>
         </section>
         <section class="login-panel" aria-labelledby="form-title">
-          <svg class="login-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 24 14.1 8h3.8L25 24h-4.5l-1.2-3H12.7l-1.2 3H7Zm7-6.8h4l-2-5.1-2 5.1Z" fill="currentColor" /></svg>
           <h1 id="form-title">Client login</h1>
           <p class="intro">Welcome back. Your night starts here.</p>
           <form id="loginForm">
@@ -72,7 +66,7 @@
             <p id="loginMessage" role="alert" hidden></p>
             <button class="login-button" id="loginSubmit" type="submit">Log in →</button>
           </form>
-          <p class="panel-footer">AVNT</p>
+          <p class="account-link">New to AVNT? <a href="create-account.html">Create an account</a></p>
         </section>
       </div>
     </main>

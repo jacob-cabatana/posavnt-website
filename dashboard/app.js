@@ -1,19 +1,24 @@
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
+import { Timestamp, addDoc, collection, deleteField, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, startAfter, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getDownloadURL, ref as storageRef } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
-import { auth, db, storage } from '../firebase.js';
+import { auth, db, functions, storage } from '../firebase.js';
 import { sharedCoffeeImagePath } from './coffee-images.mjs';
+import { coffeeStartersToSync, isUnpricedStarter } from './coffee-defaults.mjs';
+import { coffeeSizePrices, isEspresso, usesCoffeeSizes, validCoffeeSizePrices } from './coffee-sizes.mjs';
+import { coffeeModifierDefaults, coffeeModifierGroups, coffeeModifierTypes, validCoffeeModifierPrice } from './coffee-modifiers.mjs';
 import { calculateMetrics } from './metrics.mjs';
 import { createHistory } from './history.mjs';
 import { createFloor } from './floor.mjs';
 import { createTimeClock } from './timeclock.mjs';
 import { createInventory, stockInfo } from './inventory.mjs';
+import { payoutAlert } from './payout-status.mjs';
 
 const $ = id => document.getElementById(id);
 const money = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100);
 const dollars = amount => money(Math.round((Number(amount) || 0) * 100));
-const categories = ['cocktails', 'shots', 'beer', 'seltzers', 'wine', 'food', 'non_alcoholic', 'hookah', 'specials', 'modifiers'];
-const categoryName = value => ({ non_alcoholic: 'Non-alcoholic' })[value] || (value ? value[0].toUpperCase() + value.slice(1) : 'Other');
+const categories = ['hot_coffee', 'iced_coffee', 'cocktails', 'shots', 'beer', 'seltzers', 'wine', 'food', 'non_alcoholic', 'hookah', 'specials', 'modifiers'];
+const categoryName = value => ({ hot_coffee: 'Hot coffee', iced_coffee: 'Iced coffee', non_alcoholic: 'Non-alcoholic' })[value] || (value ? value[0].toUpperCase() + value.slice(1) : 'Other');
 const bundledDrinkImages = new Set([
   'bud-light', 'corona', 'cosmopolitan', 'dirty-shirley', 'draft-beer', 'espresso-martini',
   'green-tea-shot', 'heineken', 'high-noon', 'jack-and-coke', 'jager-bomb', 'lemon-drop',
@@ -58,12 +63,80 @@ function attachDrinkImage(container, drink) {
     });
   }
 }
-const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], period: '7', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
+const state = { uid: null, venue: null, drinks: [], nights: [], specials: [], orders: [], yearOrders: [], yearLoaded: false, yearLoading: false, yearError: false, period: '7', selectedNightId: null, unsubscribers: [], specialUnsubscribe: null, editor: null, coffeeModifierEditing: null, ordersLoaded: false, ordersError: false, settingsDirty: false };
+let yearLoadGeneration = 0;
+
+async function loadYearOrders() {
+  if (!state.uid || state.yearLoading || state.yearLoaded) return;
+  const uid = state.uid;
+  const generation = ++yearLoadGeneration;
+  state.yearLoading = true;
+  state.yearError = false;
+  renderAnalytics();
+  try {
+    // Fetch every page in the requested window; a fixed document cap makes
+    // busy venues' annual totals silently wrong.
+    const cutoff = new Date(Date.now() - 366 * 24 * 60 * 60 * 1000);
+    const base = collection(db, 'venues', uid, 'orders');
+    let last = null;
+    const result = [];
+    while (true) {
+      const constraints = [where('createdAt', '>=', Timestamp.fromDate(cutoff)), orderBy('createdAt', 'desc'), limit(500)];
+      if (last) constraints.push(startAfter(last));
+      const page = await getDocs(query(base, ...constraints));
+      if (state.uid !== uid || yearLoadGeneration !== generation) return;
+      result.push(...page.docs.map(item => ({ id: item.id, ...item.data() })));
+      if (page.size < 500) break;
+      last = page.docs[page.docs.length - 1];
+    }
+    state.yearOrders = result;
+    state.yearLoaded = true;
+  } catch (error) {
+    if (state.uid !== uid || yearLoadGeneration !== generation) return;
+    console.error('Could not load full-year sales', error);
+    state.yearError = true;
+  } finally {
+    if (state.uid === uid && yearLoadGeneration === generation) {
+      state.yearLoading = false;
+      renderAnalytics();
+    }
+  }
+}
 const history = createHistory({ db, getUid: () => state.uid, getVenue: () => state.venue, getOrders: () => state.orders });
 const floor = createFloor({ db, getUid: () => state.uid });
 const clock = createTimeClock({ auth, db, getUid: () => state.uid });
 const inventory = createInventory({ auth, db, getUid: () => state.uid, getDrinks: () => state.drinks, attachImage: attachDrinkImage });
 let toastTimer;
+const getStripeStatus = httpsCallable(functions, 'getPOSStripeConnectStatus');
+let payoutCheckInFlight = null;
+let lastPayoutCheck = 0;
+
+async function refreshPayoutStatus() {
+  if (!state.uid || payoutCheckInFlight === state.uid || Date.now() - lastPayoutCheck < 15000) return;
+  const uid = state.uid;
+  payoutCheckInFlight = uid;
+  lastPayoutCheck = Date.now();
+  try {
+    const { data } = await getStripeStatus();
+    if (state.uid !== uid) return;
+    const alert = payoutAlert(data);
+    $('payoutAlert').hidden = !alert;
+    if (alert) {
+      $('payoutAlertTitle').textContent = alert.title;
+      $('payoutAlertDetail').textContent = alert.detail;
+      $('payoutAlertAction').textContent = alert.action;
+    }
+  } catch (error) {
+    if (state.uid !== uid) return;
+    console.error('Could not check Stripe payout status', error);
+    $('payoutAlertTitle').textContent = 'Could not verify payout setup';
+    $('payoutAlertDetail').textContent = 'Check your Stripe connection before accepting card payments.';
+    $('payoutAlertAction').textContent = 'Check Stripe status →';
+    $('payoutAlert').hidden = false;
+  } finally {
+    if (payoutCheckInFlight === uid) payoutCheckInFlight = null;
+  }
+}
 
 function node(tag, className, text) {
   const el = document.createElement(tag);
@@ -86,6 +159,7 @@ function fail(error, context) {
 }
 
 function clearListeners() {
+  yearLoadGeneration++;
   state.unsubscribers.splice(0).forEach(unsubscribe => unsubscribe());
   state.specialUnsubscribe?.();
   state.specialUnsubscribe = null;
@@ -98,6 +172,56 @@ function nightsRef() { return collection(db, 'venues', state.uid, 'nights'); }
 function nightRef(id) { return doc(db, 'venues', state.uid, 'nights', id); }
 function specialsRef(id) { return collection(db, 'venues', state.uid, 'nights', id, 'specials'); }
 
+async function ensureCoffeeStarters(venueId) {
+  const reference = collection(db, 'venues', venueId, 'drinks');
+  const snapshot = await getDocs(reference);
+  const pending = coffeeStartersToSync(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
+  for (const starter of pending) {
+    const item = doc(reference, `coffee-${starter.slug}`);
+    await runTransaction(db, async transaction => {
+      const saved = await transaction.get(item);
+      if (saved.exists()) {
+        if (isUnpricedStarter({ id: item.id, ...saved.data() }, starter)) {
+          transaction.update(item, { price: 5,
+            sizePrices: { small: 5, medium: 6, large: 7 },
+            updatedAt: serverTimestamp() });
+        }
+        return;
+      }
+      transaction.set(item, {
+        name: starter.name,
+        category: starter.category,
+        price: 5,
+        sizePrices: { small: 5, medium: 6, large: 7 },
+        isAvailable: true,
+        imagePath: `defaultDrinks/${starter.slug}.png`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
+}
+
+async function ensureCoffeeModifiers(venueId) {
+  const reference = collection(db, 'venues', venueId, 'drinks');
+  const snapshot = await getDocs(reference);
+  const present = new Set(snapshot.docs.map(item => item.id));
+  for (const preset of coffeeModifierDefaults) {
+    if (present.has(preset.id)) continue;
+    const target = doc(reference, preset.id);
+    await runTransaction(db, async transaction => {
+      if ((await transaction.get(target)).exists()) return;
+      transaction.set(target, {
+        name: preset.name, category: 'modifiers', price: 0, modifierPricingType: 'fixed',
+        modifierScope: 'coffee', modifierGroup: preset.modifierGroup,
+        modifierCoffeeType: preset.modifierCoffeeType,
+        ...(preset.modifierExclusiveGroup ? { modifierExclusiveGroup: preset.modifierExclusiveGroup } : {}),
+        isAvailable: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    });
+  }
+}
+
 function listen(reference, onData, context) {
   return onSnapshot(reference, onData, error => fail(error, `Could not load ${context}`));
 }
@@ -107,7 +231,10 @@ async function start(user) {
   state.uid = null;
   state.venue = null;
   state.drinks = []; state.nights = []; state.specials = []; state.orders = [];
+  state.yearOrders = []; state.yearLoaded = false; state.yearLoading = false; state.yearError = false;
   state.ordersLoaded = false; state.ordersError = false;
+  lastPayoutCheck = 0;
+  $('payoutAlert').hidden = true;
   $('appShell').hidden = true; $('authGate').hidden = false;
   $('authGate').textContent = 'Checking your AVNT account…';
   try {
@@ -123,9 +250,14 @@ async function start(user) {
     }
     state.uid = user.uid;
     state.venue = venue.data();
+    if (state.venue.businessType === 'coffee_shop') {
+      ensureCoffeeStarters(user.uid).catch(error => console.error('Could not add coffee starters', error));
+      ensureCoffeeModifiers(user.uid).catch(error => console.error('Could not add coffee modifiers', error));
+    }
     $('authGate').hidden = true;
     $('appShell').hidden = false;
     renderVenue();
+    refreshPayoutStatus();
     floor.start(user.uid); clock.start(user.uid); inventory.start(user.uid);
 
     state.unsubscribers.push(listen(venueRef(), snapshot => {
@@ -135,7 +267,7 @@ async function start(user) {
     }, 'venue'));
     state.unsubscribers.push(listen(drinksRef(), snapshot => {
       state.drinks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-      renderMenu(); inventory.render();
+      renderMenu(); renderCoffeeModifiers(); inventory.render();
     }, 'menu'));
     state.unsubscribers.push(listen(nightsRef(), snapshot => {
       state.nights = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -162,6 +294,7 @@ function renderVenue() {
   const name = venue.venueName || venue.businessName || 'Your venue';
   $('topVenue').textContent = name;
   $('setupVenueName').textContent = name === 'Your venue' ? '' : name;
+  $('coffeeModifiersTile').hidden = venue.businessType !== 'coffee_shop';
   renderSetupNight();
   if (state.settingsDirty || document.activeElement?.closest('#settingsForm')) return;
   $('settingVenueName').value = name === 'Your venue' ? '' : name;
@@ -171,6 +304,8 @@ function renderVenue() {
   $('settingGratuityEnabled').checked = venue.automaticGratuityEnabled === true;
   $('settingGratuityRate').value = String([500, 1000, 1500, 2000].includes(Number(venue.automaticGratuityRateBps)) ? venue.automaticGratuityRateBps : 1000);
   $('settingTrainingMode').checked = venue.posTrainingModeEnabled === true;
+  $('deletionStatus').textContent = venue.accountDeletionRequestedAt ? 'Deletion requested' : 'Account active';
+  $('openAccountDeletion').disabled = !!venue.accountDeletionRequestedAt;
 }
 
 function setPage(page) {
@@ -183,12 +318,18 @@ function setPage(page) {
   document.querySelector('.sidebar').classList.remove('open');
   $('mobileNav').setAttribute('aria-expanded', 'false');
   if (page === 'history') history.render();
+  if (page === 'overview') refreshPayoutStatus();
   if (page === 'inventory') inventory.render();
   if (page === 'clock') clock.refreshStatus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function renderAnalytics() {
+  if (state.period === '365' && !state.yearLoaded) {
+    $('analyticsNotice').hidden = false;
+    $('analyticsNotice').textContent = state.yearError ? 'Could not load the full year. Select 1 year again to retry.' : 'Loading the full year of sales…';
+    return;
+  }
   if (!state.ordersLoaded || state.ordersError) {
     $('analyticsNotice').hidden = false;
     $('analyticsNotice').textContent = state.ordersError ? 'Sales data could not be loaded. Check your connection and refresh.' : 'Loading sales from AVNT…';
@@ -196,11 +337,14 @@ function renderAnalytics() {
   }
   let zone = state.venue?.timeZone || state.venue?.timezone || 'America/New_York';
   let metrics;
-  try { metrics = calculateMetrics(state.orders, state.period, { timeZone: zone }); }
-  catch { zone = 'America/New_York'; metrics = calculateMetrics(state.orders, state.period); }
-  $('analyticsNotice').hidden = state.orders.length < 1000;
-  $('analyticsNotice').textContent = state.orders.length >= 1000 ? 'Showing analytics from the most recent 1,000 order records. Older sales may be excluded.' : '';
-  $('periodEyebrow').textContent = state.period === 'tonight' ? '⌁  CURRENT NIGHT' : `⌁  LAST ${state.period} DAYS`;
+  const metricOrders = state.period === '365'
+    ? [...new Map([...state.yearOrders, ...state.orders].map(order => [order.id, order])).values()]
+    : state.orders;
+  try { metrics = calculateMetrics(metricOrders, state.period, { timeZone: zone }); }
+  catch { zone = 'America/New_York'; metrics = calculateMetrics(metricOrders, state.period); }
+  $('analyticsNotice').hidden = state.period === '365' || state.orders.length < 1000;
+  $('analyticsNotice').textContent = state.period !== '365' && state.orders.length >= 1000 ? 'Showing analytics from the most recent 1,000 order records. Older sales may be excluded.' : '';
+  $('periodEyebrow').textContent = state.period === 'tonight' ? '⌁  CURRENT NIGHT' : state.period === '365' ? '⌁  LAST 365 DAYS' : `⌁  LAST ${state.period} DAYS`;
   $('grossSales').textContent = money(metrics.salesCents);
   $('grossCollected').textContent = money(metrics.chargedCents);
   $('mixTotal').textContent = money(metrics.chargedCents);
@@ -212,7 +356,7 @@ function renderAnalytics() {
   $('tips').textContent = money(metrics.tipsCents);
   $('tipRate').textContent = `${metrics.salesCents ? (metrics.tipsCents / metrics.salesCents * 100).toFixed(1) : '0.0'}% of sales`;
   $('salesTax').textContent = money(metrics.venueTaxCents + metrics.feeTaxCents);
-  $('sellerPeriod').textContent = `Ranked by drink revenue · ${state.period === 'tonight' ? 'tonight' : `${state.period} days`}`;
+  $('sellerPeriod').textContent = `Ranked by drink revenue · ${state.period === 'tonight' ? 'tonight' : state.period === '365' ? '1 year' : `${state.period} days`}`;
   $('sellerCount').textContent = `${metrics.items} drinks`;
   renderTrend(metrics, zone);
   renderMix(metrics);
@@ -275,13 +419,18 @@ function trendSeries(metrics, timeZone) {
   const count = Number(state.period);
   const today = dayKey(now, timeZone);
   const byDay = new Map(metrics.dailySales);
-  return Array.from({ length: count }, (_, index) => {
+  const daily = Array.from({ length: count }, (_, index) => {
     const key = shiftedDay(today, index - count + 1);
     const date = new Date(`${key}T12:00:00Z`);
     const label = count === 7
       ? new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(date)
       : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date);
     return { label, value: byDay.get(key) || 0 };
+  });
+  if (count !== 365) return daily;
+  return Array.from({ length: 12 }, (_, index) => {
+    const chunk = daily.slice(Math.floor(index * 365 / 12), Math.floor((index + 1) * 365 / 12));
+    return { label: chunk[0]?.label?.split(' ')[0] || '', value: chunk.reduce((sum, day) => sum + day.value, 0) };
   });
 }
 
@@ -304,7 +453,7 @@ function renderTrend(metrics, timeZone) {
   });
   chart.append(svg);
   const labels = node('div', 'trend-labels');
-  const indices = state.period === '30' ? [0, 5, 11, 17, 23, 29] : points.map((_, index) => index);
+  const indices = state.period === '30' ? [0, 5, 11, 17, 23, 29] : state.period === '365' ? [0, 2, 4, 6, 8, 11] : points.map((_, index) => index);
   indices.forEach(index => labels.append(node('span', '', points[index]?.label || '')));
   chart.append(labels);
 }
@@ -351,16 +500,19 @@ function itemButton(label, handler) {
 function renderMenu() {
   const search = $('menuSearch').value.trim().toLowerCase();
   const category = $('menuCategory').value;
-  const items = state.drinks.filter(drink => (category === 'all' || drink.category === category) && String(drink.name || '').toLowerCase().includes(search))
+  const menuItems = state.drinks.filter(drink => drink.modifierScope !== 'coffee');
+  const items = menuItems.filter(drink => (category === 'all' || drink.category === category) && String(drink.name || '').toLowerCase().includes(search))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-  $('menuSummary').textContent = `${items.length} shown · ${state.drinks.length} menu items`;
+  $('menuSummary').textContent = `${items.length} shown · ${menuItems.length} menu items`;
   const list = $('menuList'); list.replaceChildren();
   if (!items.length) list.append(node('p', 'empty-state', 'No menu items match your filters.'));
   items.forEach(drink => {
     const stock = stockInfo(drink);
     const row = node('article', `menu-tile${drink.isAvailable === false ? ' unavailable' : ''}`);
     const pricing = drink.category === 'modifiers' && drink.modifierPricingType === 'percentage'
-      ? `${(Number(drink.modifierPercentageBps) / 100).toFixed(2)}%` : dollars(drink.price);
+      ? `${(Number(drink.modifierPercentageBps) / 100).toFixed(2)}%`
+      : usesCoffeeSizes(drink) ? `${dollars(coffeeSizePrices(drink).small)}–${dollars(coffeeSizePrices(drink).large)}`
+        : dollars(drink.price);
     const main = itemButton('', () => openEditor('drink', drink));
     main.className = 'menu-tile-main';
     main.setAttribute('aria-label', `Edit ${drink.name || 'menu item'}, ${pricing}`);
@@ -371,18 +523,91 @@ function renderMenu() {
     copy.append(node('strong', '', drink.name || 'Untitled item'), node('span', '', pricing));
     main.append(visual, node('span', 'menu-shade'), copy);
     if (stock.soldOut || stock.enabled && stock.available === 0) main.append(node('span', 'menu-unavailable', stock.soldOut ? 'SOLD OUT' : 'IN CHECKOUT'));
+    else if (Number(drink.price) <= 0 && drink.category !== 'modifiers') main.append(node('span', 'menu-unavailable', 'SET PRICE'));
     else if (drink.isAvailable === false) main.append(node('span', 'menu-unavailable', 'UNAVAILABLE'));
     else if (stock.low) main.append(node('span', 'menu-stock-warning', `${stock.available} left`));
     const footer = node('div', 'menu-tile-footer');
     footer.append(node('span', '', categoryName(drink.category)));
     footer.append(itemButton('Edit', () => openEditor('drink', drink)));
-    footer.append(itemButton(drink.isAvailable === false ? 'Show' : 'Hide', async () => {
+    footer.append(itemButton(Number(drink.price) <= 0 && drink.category !== 'modifiers' ? 'Set price' : drink.isAvailable === false ? 'Show' : 'Hide', async () => {
+      if (Number(drink.price) <= 0 && drink.category !== 'modifiers') { openEditor('drink', drink); return; }
       try { await updateDoc(doc(drinksRef(), drink.id), { isAvailable: drink.isAvailable === false, updatedAt: serverTimestamp() }); message('Menu availability updated.'); }
       catch (error) { fail(error, 'Could not update availability'); }
     }));
     row.append(main, footer);
     list.append(row);
   });
+}
+
+function renderCoffeeModifiers() {
+  const modifiers = state.drinks.filter(item => item.modifierScope === 'coffee');
+  $('coffeeModifierCount').textContent = `${modifiers.filter(item => item.isAvailable !== false).length} available`;
+  const list = $('coffeeModifierList'); list.replaceChildren();
+  for (const group of coffeeModifierGroups) {
+    const items = modifiers.filter(item => (item.modifierGroup || 'Extras') === group)
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    if (!items.length) continue;
+    const section = node('section', 'coffee-modifier-group');
+    section.append(node('h3', '', group));
+    for (const item of items) {
+      const row = itemButton('', () => openCoffeeModifierEditor(item));
+      row.className = 'coffee-modifier-row';
+      const detail = node('span');
+      detail.append(node('strong', '', item.name || 'Unnamed modifier'),
+        node('small', '', `${coffeeModifierTypes[item.modifierCoffeeType] || 'All coffee'}${item.isAvailable === false ? ' · Hidden' : ''}`));
+      row.append(detail, node('em', '', Number(item.price) === 0 ? 'Free' : dollars(item.price)));
+      section.append(row);
+    }
+    list.append(section);
+  }
+  if (!modifiers.length) list.append(node('p', 'empty-state', 'Loading coffee options…'));
+}
+
+function openCoffeeModifierEditor(item = null) {
+  $('coffeeModifiersDialog').close();
+  state.coffeeModifierEditing = item;
+  $('coffeeModifierEditorTitle').textContent = item ? 'Edit modifier' : 'Add modifier';
+  $('coffeeModifierName').value = item?.name || '';
+  $('coffeeModifierGroup').value = item?.modifierGroup || 'Syrups';
+  $('coffeeModifierType').value = item?.modifierCoffeeType || 'all';
+  $('coffeeModifierPrice').value = Number(item?.price || 0).toFixed(2);
+  $('coffeeModifierAvailable').checked = item?.isAvailable !== false;
+  $('coffeeModifierAvailable').closest('label').hidden = !item;
+  $('coffeeModifierError').hidden = true;
+  $('coffeeModifierEditor').showModal();
+}
+
+async function saveCoffeeModifier(event) {
+  event.preventDefault();
+  const item = state.coffeeModifierEditing;
+  const name = $('coffeeModifierName').value.trim();
+  const group = $('coffeeModifierGroup').value;
+  const type = $('coffeeModifierType').value;
+  const price = Number($('coffeeModifierPrice').value);
+  if (!name || !coffeeModifierGroups.includes(group) || !Object.hasOwn(coffeeModifierTypes, type)
+      || !validCoffeeModifierPrice(price)) {
+    $('coffeeModifierError').textContent = 'Enter a name and a valid upcharge in cents.';
+    $('coffeeModifierError').hidden = false; return;
+  }
+  const save = $('saveCoffeeModifier'); save.disabled = true; save.textContent = 'Saving…';
+  try {
+    const exclusive = item?.modifierGroup === group ? item?.modifierExclusiveGroup || null
+      : group === 'Milk' ? 'milk' : null;
+    const data = { name, modifierGroup: group, modifierCoffeeType: type,
+      modifierExclusiveGroup: exclusive || deleteField(), price: Math.round(price * 100) / 100,
+      isAvailable: $('coffeeModifierAvailable').checked, updatedAt: serverTimestamp() };
+    if (item) await updateDoc(doc(drinksRef(), item.id), data);
+    else await addDoc(drinksRef(), { ...data, modifierExclusiveGroup: exclusive || null,
+      category: 'modifiers', modifierPricingType: 'fixed', modifierScope: 'coffee',
+      createdAt: serverTimestamp() });
+    $('coffeeModifierEditor').close();
+    $('coffeeModifiersDialog').showModal();
+    message('Coffee modifier saved. The POS will update automatically.');
+  } catch (error) {
+    fail(error, 'Could not save coffee modifier');
+    $('coffeeModifierError').textContent = error.message || 'Could not save. Try again.';
+    $('coffeeModifierError').hidden = false;
+  } finally { save.disabled = false; save.textContent = 'Save modifier'; }
 }
 
 function renderSetupNight() {
@@ -468,8 +693,23 @@ function openEditor(kind, item = null) {
   const fields = $('editorFields'); fields.replaceChildren();
   fields.append(field('Name', 'name', item?.name || '', { required: true, maxLength: 80 }));
   if (kind === 'drink') {
-    fields.append(field('Category', 'category', item?.category || 'cocktails', { choices: categories.map(value => ({ value })) }));
-    fields.append(field('Price ($)', 'price', item?.price ?? 0, { type: 'number', min: 0, max: 100000, step: .01, required: true }));
+    fields.append(field('Category', 'category', item?.category || (state.venue?.businessType === 'coffee_shop' ? 'iced_coffee' : 'cocktails'), { choices: categories.map(value => ({ value })) }));
+    const prices = coffeeSizePrices(item);
+    const smallField = field('Price ($)', 'price', item?.price ?? (state.venue?.businessType === 'coffee_shop' ? 5 : 0), { type: 'number', min: 0, max: 100000, step: .01, required: true });
+    const mediumField = field('Medium ($)', 'mediumPrice', Number.isFinite(prices.medium) ? prices.medium : 6, { type: 'number', min: 0, max: 100000, step: .01 });
+    const largeField = field('Large ($)', 'largePrice', Number.isFinite(prices.large) ? prices.large : 7, { type: 'number', min: 0, max: 100000, step: .01 });
+    fields.append(smallField, mediumField, largeField);
+    const refreshSizes = () => {
+      const sized = usesCoffeeSizes({ name: fields.querySelector('[name="name"]').value, category: fields.querySelector('[name="category"]').value });
+      const espresso = isEspresso({ name: fields.querySelector('[name="name"]').value, category: fields.querySelector('[name="category"]').value });
+      smallField.querySelector('span').textContent = espresso ? 'Single ($)' : sized ? 'Small ($)' : 'Price ($)';
+      mediumField.querySelector('span').textContent = espresso ? 'Double ($)' : 'Medium ($)';
+      largeField.querySelector('span').textContent = espresso ? 'Triple ($)' : 'Large ($)';
+      mediumField.hidden = !sized; largeField.hidden = !sized;
+    };
+    fields.querySelector('[name="name"]').addEventListener('input', refreshSizes);
+    fields.querySelector('[name="category"]').addEventListener('change', refreshSizes);
+    refreshSizes();
     fields.append(field('Ingredients (comma-separated)', 'ingredients', Array.isArray(item?.ingredients) ? item.ingredients.join(', ') : '', { multiline: true }));
     fields.append(field('Modifier pricing', 'modifierPricingType', item?.modifierPricingType || 'fixed', { choices: [{ value: 'fixed', label: 'Fixed amount' }, { value: 'percentage', label: 'Percentage' }] }));
     fields.append(field('Modifier percentage', 'modifierPercentage', item?.modifierPercentageBps ? (Number(item.modifierPercentageBps) / 100).toFixed(2) : '', { type: 'number', min: .01, max: 500, step: .01 }));
@@ -503,6 +743,15 @@ async function saveEditor(event) {
       if (!Number.isFinite(price) || price < 0) throw new Error('Enter a valid price.');
       const ingredients = String(form.get('ingredients') || '').split(',').map(value => value.trim()).filter(Boolean);
       const data = { name, category, price: percentage ? 0 : Math.round(price * 100) / 100, updatedAt };
+      if (usesCoffeeSizes({ name, category })) {
+        const sizePrices = { small: price, medium: Number(form.get('mediumPrice')), large: Number(form.get('largePrice')) };
+        if (!validCoffeeSizePrices(sizePrices)) throw new Error(isEspresso({ name, category })
+          ? 'Enter valid Single, Double, and Triple prices in ascending order.'
+          : 'Enter valid Small, Medium, and Large prices in ascending order.');
+        data.sizePrices = sizePrices;
+      } else if (item?.sizePrices) {
+        data.sizePrices = deleteField();
+      }
       if (category === 'modifiers') {
         data.modifierPricingType = percentage ? 'percentage' : 'fixed';
         if (percentage) data.modifierPercentageBps = Math.round(rate * 100);
@@ -566,9 +815,16 @@ onAuthStateChanged(auth, user => {
   if (state.uid === user.uid && !$('appShell').hidden) return;
   start(user);
 });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshPayoutStatus();
+});
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => setPage(button.dataset.page)));
 document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
   state.period = button.dataset.period;
+  if (state.period === '365' && !state.yearLoaded) {
+    state.yearError = false;
+    loadYearOrders();
+  }
   document.querySelectorAll('[data-period]').forEach(item => item.classList.toggle('active', item === button));
   renderAnalytics();
 }));
@@ -582,6 +838,13 @@ $('menuCategory').addEventListener('change', renderMenu);
 $('addDrink').addEventListener('click', () => openEditor('drink'));
 $('addNight').addEventListener('click', () => openEditor('night'));
 $('openNightsSetup').addEventListener('click', () => setPage('nights'));
+$('openCoffeeModifiers').addEventListener('click', () => { renderCoffeeModifiers(); $('coffeeModifiersDialog').showModal(); });
+$('closeCoffeeModifiers').addEventListener('click', () => $('coffeeModifiersDialog').close());
+$('doneCoffeeModifiers').addEventListener('click', () => $('coffeeModifiersDialog').close());
+$('addCoffeeModifier').addEventListener('click', () => openCoffeeModifierEditor());
+$('closeCoffeeModifierEditor').addEventListener('click', () => { $('coffeeModifierEditor').close(); $('coffeeModifiersDialog').showModal(); });
+$('cancelCoffeeModifierEditor').addEventListener('click', () => { $('coffeeModifierEditor').close(); $('coffeeModifiersDialog').showModal(); });
+$('coffeeModifierForm').addEventListener('submit', saveCoffeeModifier);
 $('openClockSetup').addEventListener('click', () => setPage('clock'));
 $('editNight').addEventListener('click', () => openEditor('night', state.nights.find(night => night.id === state.selectedNightId)));
 $('addSpecial').addEventListener('click', () => openEditor('special'));
@@ -593,6 +856,32 @@ $('activateNight').addEventListener('click', async () => {
 });
 $('settingsForm').addEventListener('input', () => { state.settingsDirty = true; $('settingsStatus').textContent = 'Unsaved changes'; });
 $('settingsForm').addEventListener('submit', saveSettings);
+$('openAccountDeletion').addEventListener('click', () => $('accountDeletionDialog').showModal());
+$('accountDeletionClose').addEventListener('click', () => $('accountDeletionDialog').close());
+$('accountDeletionCancel').addEventListener('click', () => $('accountDeletionDialog').close());
+$('accountDeletionForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = $('accountDeletionSubmit');
+  const errorNode = $('accountDeletionError');
+  const user = auth.currentUser;
+  if (!user?.email || !state.uid) return;
+  button.disabled = true;
+  errorNode.hidden = true;
+  try {
+    const credential = EmailAuthProvider.credential(user.email, $('accountDeletionPassword').value);
+    await reauthenticateWithCredential(user, credential);
+    await user.getIdToken(true);
+    await httpsCallable(functions, 'requestPOSAccountDeletion')({ confirmation: 'DELETE', source: 'website' });
+    $('accountDeletionPassword').value = '';
+    $('accountDeletionDialog').close();
+    $('deletionStatus').textContent = 'Deletion requested';
+    $('openAccountDeletion').disabled = true;
+    message('Your deletion request was recorded. New sales are disabled.');
+  } catch (error) {
+    errorNode.textContent = error.message || 'Could not submit the request.';
+    errorNode.hidden = false;
+  } finally { button.disabled = false; }
+});
 $('editorForm').addEventListener('submit', saveEditor);
 $('closeEditor').addEventListener('click', () => $('editorDialog').close());
 $('cancelEditor').addEventListener('click', () => $('editorDialog').close());

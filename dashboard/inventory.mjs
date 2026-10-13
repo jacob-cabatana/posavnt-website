@@ -1,5 +1,6 @@
 import { collection, limit, onSnapshot, orderBy, query } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
+import { usesCoffeeSizes } from './coffee-sizes.mjs';
 
 const $ = id => document.getElementById(id);
 const make = (tag, className, text) => {
@@ -8,7 +9,7 @@ const make = (tag, className, text) => {
 };
 const integer = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
 export function stockInfo(item) {
-  const enabled = item.inventoryEnabled === true;
+  const enabled = item.inventoryEnabled === true && !usesCoffeeSizes(item);
   const quantity = integer(item.inventoryQuantity), reserved = integer(item.inventoryReserved);
   const available = Math.max(0, quantity - reserved);
   const threshold = item.inventoryLowStockThreshold === undefined ? 10 : integer(item.inventoryLowStockThreshold);
@@ -23,7 +24,7 @@ export function createInventory({auth, db, getUid, getDrinks, attachImage}) {
   const notice = text => { $('inventoryNotice').textContent = text || ''; $('inventoryNotice').hidden = !text; };
 
   function render() {
-    const items = getDrinks().filter(item => item.category !== 'modifiers');
+    const items = getDrinks().filter(item => item.category !== 'modifiers' && !usesCoffeeSizes(item));
     const tracked = items.filter(item => stockInfo(item).enabled);
     const low = tracked.filter(item => stockInfo(item).low), soldOut = tracked.filter(item => stockInfo(item).soldOut);
     $('inventoryTracked').textContent = tracked.length;
